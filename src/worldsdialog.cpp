@@ -246,7 +246,7 @@ WorldsDialog::WorldsDialog(const QString &path, const QString &exe, QProcess *se
         inner->setSpacing(8);
         while (QLayoutItem *child = outer->takeAt(0)) {
             if (QWidget *w = child->widget()) {
-                inner->addWidget(w, w == ui->worldsList || w == ui->avatarsList ? 1 : 0);
+                inner->addWidget(w, w == ui->worldsList || w == ui->avatarsList || w == ui->inventoryList ? 1 : 0);
                 delete child;
             } else if (QLayout *sub = child->layout()) {
                 inner->addLayout(sub);
@@ -289,6 +289,9 @@ WorldsDialog::WorldsDialog(const QString &path, const QString &exe, QProcess *se
     QWidget *localAvatars = wrapWithArchive(ui->avatarsTab, "avatarsViewTabs", tr("My avatars"),
         tr("Avatars saved on your computer"), tr("Browse and download archived KoGaMa avatars"),
         ArchiveBrowser::Avatars, &m_avatarsView, &m_avatarsStack, &m_avatarsArchive);
+    QWidget *localInventory = wrapWithArchive(ui->inventoryTab, "inventoryViewTabs", tr("My inventory"),
+        tr("Models saved on your computer"), tr("Browse and download archived KoGaMa models"),
+        ArchiveBrowser::Models, &m_inventoryView, &m_inventoryStack, &m_modelsArchive);
 
     auto *refreshWorlds = new QShortcut(QKeySequence::Refresh, localWorlds);
     refreshWorlds->setContext(Qt::WidgetWithChildrenShortcut);
@@ -337,7 +340,7 @@ WorldsDialog::WorldsDialog(const QString &path, const QString &exe, QProcess *se
     auto *deleteItemShortcut = new QShortcut(QKeySequence::Delete, ui->inventoryList);
     deleteItemShortcut->setContext(Qt::WidgetShortcut);
     connect(deleteItemShortcut, &QShortcut::activated, this, &WorldsDialog::deleteItem);
-    auto *refreshInventory = new QShortcut(QKeySequence::Refresh, ui->inventoryTab);
+    auto *refreshInventory = new QShortcut(QKeySequence::Refresh, localInventory);
     refreshInventory->setContext(Qt::WidgetWithChildrenShortcut);
     connect(refreshInventory, &QShortcut::activated, this, [this]() { loadInventory(selectedItem(), true); });
     connect(ui->inventoryList, &QListWidget::customContextMenuRequested, this, &WorldsDialog::showItemMenu);
@@ -420,7 +423,14 @@ void WorldsDialog::showAvatars(int select) {
 }
 
 void WorldsDialog::showInventory(int select) {
+    if (select > 0 && m_inventoryView) m_inventoryView->setCurrentIndex(0);
     loadInventory(select < 0 ? selectedItem() : select, false);
+}
+
+void WorldsDialog::refreshAfterImport(const QString &kind, int select) {
+    if (kind == "map") loadWorlds(select, false);
+    else if (kind == "avatar") loadAvatars(select, false);
+    else loadInventory(select, false);
 }
 
 void WorldsDialog::setArchiveThumbnail(int world, const QUrl &url) {

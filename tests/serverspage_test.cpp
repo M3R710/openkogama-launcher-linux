@@ -1,5 +1,6 @@
 #include "serverspage.h"
 #include "archivebrowser.h"
+#include "downloadmanager.h"
 #include "settings.h"
 #include "tunnel.h"
 #include "sharebar.h"
@@ -43,6 +44,7 @@
 #include <QUrl>
 #include <QUrlQuery>
 #include <QtEndian>
+#include <cstring>
 
 class MockServer : public QTcpServer
 {
@@ -461,6 +463,107 @@ private slots:
         QCOMPARE(captured.offset, qint64(100));
         QCOMPARE(captured.length, qint64(250));
         QCOMPARE(captured.urls, QList<QUrl>({QUrl(server.url() + "/avatars/v1/builds/av-1/packs/01a.bin")}));
+    }
+
+    void archiveModelsMultiSelectAndImport()
+    {
+        MockServer server;
+        server.routes["/models/v2/latest.json"] = QByteArrayLiteral(
+            "{\"format\":3,\"build\":\"mod-1\",\"models\":3,"
+            "\"cards\":{\"path\":\"cards/\",\"record\":57,\"perFile\":16384},"
+            "\"titles\":\"maps.json\"}");
+
+        auto makeModelCard = [](uchar shaByte, quint32 maps, quint32 cubes, float scale, quint8 image, quint16 pack, quint32 offset, quint32 length, quint16 mapIdx) {
+            QByteArray rec(57, '\0');
+            for (int i = 0; i < 32; ++i) rec[i] = char(shaByte);
+            qToLittleEndian(maps, reinterpret_cast<uchar *>(rec.data() + 32));
+            qToLittleEndian(cubes, reinterpret_cast<uchar *>(rec.data() + 36));
+            quint32 bits = 0;
+            std::memcpy(&bits, &scale, sizeof bits);
+            qToLittleEndian(bits, reinterpret_cast<uchar *>(rec.data() + 40));
+            rec[44] = char(image);
+            qToLittleEndian(pack, reinterpret_cast<uchar *>(rec.data() + 45));
+            qToLittleEndian(offset, reinterpret_cast<uchar *>(rec.data() + 47));
+            qToLittleEndian(length, reinterpret_cast<uchar *>(rec.data() + 51));
+            qToLittleEndian(mapIdx, reinterpret_cast<uchar *>(rec.data() + 55));
+            return rec;
+        };
+
+        QByteArray cards;
+        cards.append(makeModelCard(0xaa, 600, 286, 0.25f, 1, 0x005, 100, 300, 1));
+        cards.append(makeModelCard(0xbb, 400, 120, 0.5f, 1, 0x007, 50, 200, 1));
+        cards.append(makeModelCard(0xcc, 900, 500, 1.0f, 1, 0x009, 0, 100, 1)); // mature -> excluded
+        server.routes["/models/v2/builds/mod-1/cards/000.bin"] = cards;
+        server.routes["/models/v2/builds/mod-1/maps.json"] = QByteArrayLiteral("[\"\",\"Space Map\"]");
+        server.routes["/models/meta.json"] = QByteArrayLiteral(
+            "{\"build\":\"mod-1\",\"fields\":[\"name\",\"type\",\"desc\",\"flags\",\"rating\",\"tags\"],"
+            "\"rows\":{"
+            "\"1\":[\"White Hovercraft\",\"vehicle\",\"Sci-fi craft\",\"\",\"\",\"scifi\"],"
+            "\"2\":[\"Round Tree\",\"plant\",\"Green tree\",\"\",\"\",\"nature\"],"
+            "\"3\":[\"Hidden Model\",\"other\",\"Blocked\",\"\",\"mature\",\"\"]"
+            "}}");
+
+        ArchiveBrowser browser(ArchiveBrowser::Models);
+        browser.setEndpoints(QUrl(server.url() + "/models/v2/"), QUrl(server.url() + "/models/meta.json"));
+        browser.ensureLoaded();
+
+        auto *list = browser.findChild<QListWidget *>("archiveModelsList");
+        auto *add = browser.findChild<QPushButton *>("archiveAddModelButton");
+        QVERIFY(list && add);
+
+        // Mature #3 excluded; #1 and #2 remain
+        QTRY_COMPARE(list->count(), 2);
+        QCOMPARE(list->item(0)->text(), QString("White Hovercraft"));
+        QCOMPARE(list->item(1)->text(), QString("Round Tree"));
+
+        // Multi-select both items
+        list->selectAll();
+        QCOMPARE(list->selectedItems().size(), 2);
+        QVERIFY(add->text().contains("2"));
+
+        QList<ImportRequest> captured;
+        QObject::connect(&browser, &ArchiveBrowser::importRequested, &browser, [&](const ImportRequest &req, const QUrl &) {
+            captured.append(req);
+        });
+        add->click();
+        QCOMPARE(captured.size(), 2);
+        QCOMPARE(captured[0].kind, QString("model"));
+        QCOMPARE(captured[0].name, QString("White Hovercraft"));
+        QCOMPARE(captured[0].scale, QString("0.25"));
+        QCOMPARE(captured[0].offset, qint64(100));
+        QCOMPARE(captured[0].length, qint64(300));
+        QCOMPARE(captured[1].name, QString("Round Tree"));
+        QCOMPARE(captured[1].scale, QString("0.5"));
+    }
+
+    void downloadManagerQueueAndPopup()
+    {
+        DownloadManager manager;
+        DownloadsPopup popup(&manager);
+
+        ImportRequest req;
+        req.kind = "model";
+        req.name = "Test Model";
+        req.urls = {QUrl("http://127.0.0.1:9/unreachable")};
+
+        // Enqueue 5 jobs -> max 3 running concurrently, 2 queued
+        QVector<int> ids;
+        for (int i = 0; i < 5; ++i) {
+            req.name = QString("Model %1").arg(i + 1);
+            ids.append(manager.enqueue(req, {}, "3.5.25"));
+        }
+        QCOMPARE(manager.entries().size(), 5);
+        QVERIFY(manager.runningCount() <= DownloadManager::MaxConcurrent);
+        QCOMPARE(manager.activeCount(), 5);
+
+        // Cancel all and clear finished
+        manager.cancelAll();
+        QCOMPARE(manager.activeCount(), 0);
+        for (int id : ids)
+            QCOMPARE(manager.entryById(id)->state, DownloadEntry::Cancelled);
+
+        manager.clearFinished();
+        QCOMPARE(manager.entries().size(), 0);
     }
 
     void cleanupTestCase()

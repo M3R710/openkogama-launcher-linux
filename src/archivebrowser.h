@@ -6,12 +6,14 @@
 #include <QHash>
 #include <QIcon>
 #include <QJsonArray>
+#include <QJsonObject>
 #include <QPointer>
 #include <QQueue>
 #include <QSet>
 #include <QUrl>
 #include <QVector>
 #include <QWidget>
+#include <functional>
 
 class QComboBox;
 class QLabel;
@@ -28,7 +30,7 @@ class ArchiveBrowser : public QWidget
     Q_OBJECT
 
 public:
-    enum Kind { Maps, Avatars };
+    enum Kind { Maps, Avatars, Models };
 
     explicit ArchiveBrowser(Kind kind, QWidget *parent = nullptr);
 
@@ -60,6 +62,7 @@ private:
         qint64 size = 0;
         quint32 maps = 0;
         quint32 cubes = 0;
+        float scale = 0.0f;
         quint16 pack = 0;
         quint32 offset = 0;
         quint32 length = 0;
@@ -69,21 +72,24 @@ private:
 
     void fetchLatest();
     void loadMapArchive();
-    void loadAvatarArchive();
-    void finishAvatarArchive(const QByteArray &cards, const QByteArray &titles, const QByteArray &meta);
+    void loadCardArchive();
+    void loadCardChunk(int chunkIndex, std::function<void()> done = {});
     void parseMapIndex(const QByteArray &data);
-    void parseAvatarArchive(const QByteArray &cards, const QByteArray &titles, const QByteArray &meta);
+    void parseCardChunk(int chunkIndex, const QByteArray &cards);
+    void refreshTypeFilter();
 
     void applyFilter();
     void appendPage();
     void updateActions();
-    void requestImport();
-    void requestMapDetail(const Entry &entry);
+    void requestImportSelection();
+    void requestImportEntries(const QVector<int> &entryIndices);
+    void requestMapDetails(const QVector<Entry> &entries);
     void fetchNextThumbnail();
     void loadThumbnailFor(QListWidgetItem *item);
     QUrl thumbnailUrlFor(const Entry &entry) const;
     QString subtitleFor(const Entry &entry) const;
     QString detailFor(const Entry &entry) const;
+    QString cachePrefix() const;
 
     QByteArray readCache(const QString &fileName) const;
     void writeCache(const QString &fileName, const QByteArray &data) const;
@@ -103,9 +109,13 @@ private:
     int m_detailsPerFile = 1024;
     int m_cardRecordSize = 54;
     int m_cardsPerFile = 16384;
-    int m_totalAvatars = 0;
+    int m_totalCards = 0;
+    int m_loadedCardChunks = 0;
+    int m_totalCardChunks = 0;
+    bool m_loadingChunk = false;
 
     QNetworkAccessManager *m_net;
+    QNetworkAccessManager *m_thumbNet;
     QLineEdit *m_search;
     QComboBox *m_filter;
     QComboBox *m_sort;
@@ -116,6 +126,9 @@ private:
     QPushButton *m_addButton;
     QTimer *m_searchTimer;
 
+    QStringList m_mapTitles;
+    QJsonObject m_metaRows;
+    QSet<QString> m_types;
     QVector<Entry> m_entries;
     QVector<int> m_filtered;
     int m_shown = 0;

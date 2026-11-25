@@ -3,6 +3,7 @@
 #include "paths.h"
 #include "tilegrid.h"
 
+#include <QAbstractItemView>
 #include <QApplication>
 #include <QComboBox>
 #include <QDir>
@@ -31,6 +32,8 @@
 #include <QVBoxLayout>
 #include <QtEndian>
 #include <algorithm>
+#include <cmath>
+#include <cstring>
 #include <memory>
 
 namespace {
@@ -38,6 +41,8 @@ namespace {
 const QUrl DefaultMapsArchive("https://cdn.openkogama.org/maps/v1/");
 const QUrl DefaultAvatarsArchive("https://cdn.openkogama.org/avatars/v1/");
 const QUrl DefaultAvatarsMeta("https://openkogama.org/avatars/meta.json");
+const QUrl DefaultModelsArchive("https://cdn.openkogama.org/models/v2/");
+const QUrl DefaultModelsMeta("https://openkogama.org/models/meta.json");
 
 constexpr int IndexRole = Qt::UserRole;
 constexpr int ThumbnailRole = Qt::UserRole + 1;
@@ -48,6 +53,7 @@ constexpr int SearchDebounceMs = 150;
 constexpr int NetworkTimeoutMs = 30000;
 constexpr int ThumbnailTimeoutMs = 10000;
 constexpr int ScrollThreshold = 240;
+constexpr int ModelSearchChunks = 3; // Covers top 49,152 models (all 37k PNGs + all curated meta.json entries)
 
 QString cacheDir()
 {
@@ -89,14 +95,23 @@ QString capitalize(const QString &text)
     return text.isEmpty() ? text : text.left(1).toUpper() + text.mid(1);
 }
 
+float readLittleFloat(const uchar *src)
+{
+    const quint32 bits = qFromLittleEndian<quint32>(src);
+    float value = 0.0f;
+    std::memcpy(&value, &bits, sizeof value);
+    return float(std::round(double(value) * 10000.0) / 10000.0);
+}
+
 }
 
 ArchiveBrowser::ArchiveBrowser(Kind kind, QWidget *parent)
     : QWidget(parent)
     , m_kind(kind)
-    , m_archiveUrl(kind == Maps ? DefaultMapsArchive : DefaultAvatarsArchive)
-    , m_metaUrl(kind == Avatars ? DefaultAvatarsMeta : QUrl())
+    , m_archiveUrl(kind == Maps ? DefaultMapsArchive : kind == Avatars ? DefaultAvatarsArchive : DefaultModelsArchive)
+    , m_metaUrl(kind == Avatars ? DefaultAvatarsMeta : kind == Models ? DefaultModelsMeta : QUrl())
     , m_net(new QNetworkAccessManager(this))
+    , m_thumbNet(new QNetworkAccessManager(this))
     , m_search(new QLineEdit(this))
     , m_filter(new QComboBox(this))
     , m_sort(new QComboBox(this))
@@ -107,19 +122,20 @@ ArchiveBrowser::ArchiveBrowser(Kind kind, QWidget *parent)
     , m_addButton(new QPushButton(this))
     , m_searchTimer(new QTimer(this))
 {
-    setObjectName(kind == Maps ? "mapsArchivePage" : "avatarsArchivePage");
+    setObjectName(kind == Maps ? "mapsArchivePage" : kind == Avatars ? "avatarsArchivePage" : "modelsArchivePage");
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(8);
 
     auto *toolbar = new QHBoxLayout;
-    m_search->setObjectName(kind == Maps ? "archiveMapSearch" : "archiveAvatarSearch");
-    m_search->setPlaceholderText(kind == Maps ? tr("Search archived maps...") : tr("Search archived avatars..."));
+    m_search->setObjectName(kind == Maps ? "archiveMapSearch" : kind == Avatars ? "archiveAvatarSearch" : "archiveModelSearch");
+    m_search->setPlaceholderText(kind == Maps ? tr("Search archived maps...")
+        : kind == Avatars ? tr("Search archived avatars...") : tr("Search archived models..."));
     m_search->setAccessibleName(m_search->placeholderText());
     m_search->setClearButtonEnabled(true);
 
-    m_filter->setObjectName(kind == Maps ? "archiveMapRegionFilter" : "archiveAvatarTypeFilter");
+    m_filter->setObjectName(kind == Maps ? "archiveMapRegionFilter" : kind == Avatars ? "archiveAvatarTypeFilter" : "archiveModelTypeFilter");
     if (kind == Maps) {
         m_filter->addItem(tr("All regions"), QString());
         m_filter->addItem(QStringLiteral("www"), QStringLiteral("www"));
@@ -129,7 +145,7 @@ ArchiveBrowser::ArchiveBrowser(Kind kind, QWidget *parent)
         m_filter->addItem(tr("All types"), QString());
     }
 
-    m_sort->setObjectName(kind == Maps ? "archiveMapSort" : "archiveAvatarSort");
+    m_sort->setObjectName(kind == Maps ? "archiveMapSort" : kind == Avatars ? "archiveAvatarSort" : "archiveModelSort");
     if (kind == Maps) {
         m_sort->addItem(tr("Most played"), QStringLiteral("plays"));
         m_sort->addItem(tr("Most liked"), QStringLiteral("likes"));
@@ -146,15 +162,16 @@ ArchiveBrowser::ArchiveBrowser(Kind kind, QWidget *parent)
     toolbar->addWidget(m_sort);
     layout->addLayout(toolbar);
 
-    m_status->setObjectName(kind == Maps ? "archiveMapStatus" : "archiveAvatarStatus");
+    m_status->setObjectName(kind == Maps ? "archiveMapStatus" : kind == Avatars ? "archiveAvatarStatus" : "archiveModelStatus");
     m_status->setWordWrap(true);
     m_status->setTextFormat(Qt::PlainText);
     m_status->hide();
     layout->addWidget(m_status);
 
-    m_list->setObjectName(kind == Maps ? "archiveMapsList" : "archiveAvatarsList");
-    m_list->setAccessibleName(kind == Maps ? tr("Archived maps") : tr("Archived avatars"));
+    m_list->setObjectName(kind == Maps ? "archiveMapsList" : kind == Avatars ? "archiveAvatarsList" : "archiveModelsList");
+    m_list->setAccessibleName(kind == Maps ? tr("Archived maps") : kind == Avatars ? tr("Archived avatars") : tr("Archived models"));
     TileGrid::setup(m_list, this);
+    m_list->setSelectionMode(QAbstractItemView::ExtendedSelection);
     layout->addWidget(m_list, 1);
 
     auto *line = new QFrame(this);
@@ -163,14 +180,13 @@ ArchiveBrowser::ArchiveBrowser(Kind kind, QWidget *parent)
     layout->addWidget(line);
 
     auto *actions = new QHBoxLayout;
-    m_selected->setObjectName(kind == Maps ? "archiveSelectedMapLabel" : "archiveSelectedAvatarLabel");
+    m_selected->setObjectName(kind == Maps ? "archiveSelectedMapLabel" : kind == Avatars ? "archiveSelectedAvatarLabel" : "archiveSelectedModelLabel");
     m_selected->setTextFormat(Qt::PlainText);
     m_detail->setObjectName("selectedItemDetail");
     m_detail->setTextFormat(Qt::PlainText);
-    m_addButton->setObjectName(kind == Maps ? "archiveAddMapButton" : "archiveAddAvatarButton");
+    m_addButton->setObjectName(kind == Maps ? "archiveAddMapButton" : kind == Avatars ? "archiveAddAvatarButton" : "archiveAddModelButton");
     m_addButton->setProperty("primary", true);
-    m_addButton->setText(kind == Maps ? tr("Add to my worlds") : tr("Add to my avatars"));
-    m_addButton->setMinimumWidth(130);
+    m_addButton->setMinimumWidth(140);
 
     actions->addWidget(m_selected);
     actions->addWidget(m_detail);
@@ -180,17 +196,33 @@ ArchiveBrowser::ArchiveBrowser(Kind kind, QWidget *parent)
 
     m_searchTimer->setSingleShot(true);
     m_searchTimer->setInterval(SearchDebounceMs);
-    connect(m_searchTimer, &QTimer::timeout, this, &ArchiveBrowser::applyFilter);
+    connect(m_searchTimer, &QTimer::timeout, this, [this]() {
+        if (m_kind == Models && m_loaded && !m_search->text().trimmed().isEmpty()
+            && m_loadedCardChunks < qMin(ModelSearchChunks, m_totalCardChunks) && !m_loadingChunk) {
+            loadCardChunk(m_loadedCardChunks);
+        }
+        applyFilter();
+    });
     connect(m_search, &QLineEdit::textChanged, this, [this]() { m_searchTimer->start(); });
     connect(m_filter, &QComboBox::currentIndexChanged, this, &ArchiveBrowser::applyFilter);
     connect(m_sort, &QComboBox::currentIndexChanged, this, &ArchiveBrowser::applyFilter);
 
     connect(m_list, &QListWidget::currentItemChanged, this, &ArchiveBrowser::updateActions);
-    connect(m_list, &QListWidget::itemActivated, this, &ArchiveBrowser::requestImport);
-    connect(m_addButton, &QPushButton::clicked, this, &ArchiveBrowser::requestImport);
+    connect(m_list, &QListWidget::itemSelectionChanged, this, &ArchiveBrowser::updateActions);
+    connect(m_list, &QListWidget::itemActivated, this, [this](QListWidgetItem *item) {
+        if (!item) return;
+        const int idx = item->data(IndexRole).toInt();
+        if (idx >= 0 && idx < m_entries.size())
+            requestImportEntries({idx});
+    });
+    connect(m_addButton, &QPushButton::clicked, this, &ArchiveBrowser::requestImportSelection);
     connect(m_list->verticalScrollBar(), &QScrollBar::valueChanged, this, [this](int value) {
-        if (m_shown < m_filtered.size() && value >= m_list->verticalScrollBar()->maximum() - ScrollThreshold)
+        if (value < m_list->verticalScrollBar()->maximum() - ScrollThreshold) return;
+        if (m_shown < m_filtered.size()) {
             appendPage();
+        } else if (m_kind != Maps && m_loaded && m_loadedCardChunks < m_totalCardChunks && !m_loadingChunk) {
+            loadCardChunk(m_loadedCardChunks);
+        }
     });
 
     auto *refresh = new QShortcut(QKeySequence::Refresh, this);
@@ -220,7 +252,14 @@ void ArchiveBrowser::ensureLoaded()
 void ArchiveBrowser::reload()
 {
     m_loaded = false;
+    m_loadingChunk = false;
+    m_loadedCardChunks = 0;
+    m_totalCardChunks = 0;
+    m_entries.clear();
     m_mapDetails.clear();
+    m_mapTitles.clear();
+    m_metaRows = QJsonObject();
+    m_types.clear();
     fetchLatest();
 }
 
@@ -231,11 +270,17 @@ bool ArchiveBrowser::eventFilter(QObject *watched, QEvent *event)
     return QWidget::eventFilter(watched, event);
 }
 
+QString ArchiveBrowser::cachePrefix() const
+{
+    return m_kind == Maps ? QStringLiteral("maps-") : m_kind == Avatars ? QStringLiteral("avatars-") : QStringLiteral("models-");
+}
+
 void ArchiveBrowser::fetchLatest()
 {
     if (m_loading) return;
     m_loading = true;
-    m_status->setText(m_kind == Maps ? tr("Loading maps archive...") : tr("Loading avatars archive..."));
+    m_status->setText(m_kind == Maps ? tr("Loading maps archive...")
+        : m_kind == Avatars ? tr("Loading avatars archive...") : tr("Loading models archive..."));
     m_status->show();
 
     QNetworkReply *reply = m_net->get(archiveRequest(m_archiveUrl.resolved(QUrl("latest.json"))));
@@ -268,12 +313,13 @@ void ArchiveBrowser::fetchLatest()
         } else {
             const QJsonObject cards = latest.value("cards").toObject();
             m_cardsPath = cards.value("path").toString("cards/");
-            m_cardRecordSize = qMax(54, cards.value("record").toInt(54));
+            m_cardRecordSize = qMax(m_kind == Models ? 57 : 54, cards.value("record").toInt(m_kind == Models ? 57 : 54));
             m_cardsPerFile = qMax(1, cards.value("perFile").toInt(16384));
-            m_totalAvatars = latest.value("avatars").toInt();
+            m_totalCards = latest.value(m_kind == Models ? "models" : "avatars").toInt();
+            m_totalCardChunks = qMax(1, (m_totalCards + m_cardsPerFile - 1) / m_cardsPerFile);
             m_titlesPath = latest.value("titles").toString("maps.json");
             m_imagePath = latest.value("imagePath").toString("images/");
-            loadAvatarArchive();
+            loadCardArchive();
         }
     });
 }
@@ -306,23 +352,22 @@ void ArchiveBrowser::loadMapArchive()
     });
 }
 
-void ArchiveBrowser::loadAvatarArchive()
+void ArchiveBrowser::loadCardArchive()
 {
-    const int cardFiles = qMax(1, (m_totalAvatars + m_cardsPerFile - 1) / m_cardsPerFile);
     struct State {
-        QVector<QByteArray> chunks;
+        QByteArray cards0;
         QByteArray titles;
         QByteArray meta;
         int remaining = 0;
         bool cardsFailed = false;
     };
     auto state = std::make_shared<State>();
-    state->chunks.resize(cardFiles);
 
-    const QString prefix = "avatars-" + m_build + "-";
+    const QString basePrefix = cachePrefix();
+    const QString prefix = basePrefix + m_build + "-";
     const bool hasMeta = m_metaUrl.isValid() && !m_metaUrl.isEmpty();
 
-    auto checkDone = [this, state, prefix]() {
+    auto checkDone = [this, state, basePrefix, prefix]() {
         if (state->remaining > 0) return;
         m_loading = false;
         if (state->cardsFailed) {
@@ -330,29 +375,44 @@ void ArchiveBrowser::loadAvatarArchive()
             m_status->show();
             return;
         }
-        QByteArray cards;
-        for (const QByteArray &chunk : std::as_const(state->chunks))
-            cards.append(chunk);
-        pruneCache("avatars-", prefix);
+        pruneCache(basePrefix, prefix);
+
+        m_mapTitles.clear();
+        if (!state->titles.isEmpty()) {
+            const QJsonArray array = QJsonDocument::fromJson(state->titles).array();
+            m_mapTitles.reserve(array.size());
+            for (const QJsonValue &val : array)
+                m_mapTitles.append(val.toString().trimmed());
+        }
+
+        m_metaRows = QJsonObject();
+        if (!state->meta.isEmpty()) {
+            const QJsonObject metaDoc = QJsonDocument::fromJson(state->meta).object();
+            if (metaDoc.value("build").toString() == m_build)
+                m_metaRows = metaDoc.value("rows").toObject();
+        }
+
+        m_entries.clear();
+        m_types.clear();
+        m_loadedCardChunks = 0;
+        parseCardChunk(0, state->cards0);
+        m_loadedCardChunks = 1;
         m_loaded = true;
-        finishAvatarArchive(cards, state->titles, state->meta);
+        refreshTypeFilter();
+        applyFilter();
     };
 
-    for (int i = 0; i < cardFiles; ++i) {
-        const QString fileName = prefix + "cards-" + hexChunk(i) + ".bin";
-        const QByteArray cached = readCache(fileName);
-        if (!cached.isEmpty()) {
-            state->chunks[i] = cached;
-            continue;
-        }
+    const QString cardsFile = prefix + "cards-000.bin";
+    state->cards0 = readCache(cardsFile);
+    if (state->cards0.isEmpty()) {
         state->remaining++;
-        const QUrl url = m_buildUrl.resolved(QUrl(m_cardsPath + hexChunk(i) + ".bin"));
+        const QUrl url = m_buildUrl.resolved(QUrl(m_cardsPath + "000.bin"));
         QNetworkReply *reply = m_net->get(archiveRequest(url));
-        connect(reply, &QNetworkReply::finished, this, [this, reply, state, i, fileName, checkDone]() {
+        connect(reply, &QNetworkReply::finished, this, [this, reply, state, cardsFile, checkDone]() {
             reply->deleteLater();
             if (reply->error() == QNetworkReply::NoError) {
-                state->chunks[i] = reply->readAll();
-                writeCache(fileName, state->chunks[i]);
+                state->cards0 = reply->readAll();
+                writeCache(cardsFile, state->cards0);
             } else {
                 state->cardsFailed = true;
             }
@@ -401,9 +461,49 @@ void ArchiveBrowser::loadAvatarArchive()
     checkDone();
 }
 
-void ArchiveBrowser::finishAvatarArchive(const QByteArray &cards, const QByteArray &titles, const QByteArray &meta)
+void ArchiveBrowser::loadCardChunk(int chunkIndex, std::function<void()> done)
 {
-    parseAvatarArchive(cards, titles, meta);
+    if (m_loadingChunk || chunkIndex < m_loadedCardChunks || chunkIndex >= m_totalCardChunks) {
+        if (done) done();
+        return;
+    }
+    m_loadingChunk = true;
+
+    const QString fileName = cachePrefix() + m_build + "-cards-" + hexChunk(chunkIndex) + ".bin";
+    auto finishChunk = [this, chunkIndex, done](const QByteArray &data) {
+        m_loadingChunk = false;
+        if (!data.isEmpty() && chunkIndex == m_loadedCardChunks) {
+            parseCardChunk(chunkIndex, data);
+            m_loadedCardChunks = chunkIndex + 1;
+            refreshTypeFilter();
+            applyFilter();
+        }
+        if (done) done();
+        // If searching models, continue loading up to ModelSearchChunks
+        if (m_kind == Models && !m_search->text().trimmed().isEmpty()
+            && m_loadedCardChunks < qMin(ModelSearchChunks, m_totalCardChunks)) {
+            loadCardChunk(m_loadedCardChunks);
+        }
+    };
+
+    const QByteArray cached = readCache(fileName);
+    if (!cached.isEmpty()) {
+        finishChunk(cached);
+        return;
+    }
+
+    const QUrl url = m_buildUrl.resolved(QUrl(m_cardsPath + hexChunk(chunkIndex) + ".bin"));
+    QNetworkReply *reply = m_net->get(archiveRequest(url));
+    connect(reply, &QNetworkReply::finished, this, [this, reply, fileName, finishChunk]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            finishChunk({});
+            return;
+        }
+        const QByteArray data = reply->readAll();
+        writeCache(fileName, data);
+        finishChunk(data);
+    });
 }
 
 void ArchiveBrowser::parseMapIndex(const QByteArray &data)
@@ -456,39 +556,24 @@ void ArchiveBrowser::parseMapIndex(const QByteArray &data)
     applyFilter();
 }
 
-void ArchiveBrowser::parseAvatarArchive(const QByteArray &cards, const QByteArray &titles, const QByteArray &meta)
+void ArchiveBrowser::parseCardChunk(int chunkIndex, const QByteArray &cards)
 {
-    m_entries.clear();
-
-    QStringList mapTitles;
-    if (!titles.isEmpty()) {
-        const QJsonArray array = QJsonDocument::fromJson(titles).array();
-        mapTitles.reserve(array.size());
-        for (const QJsonValue &val : array)
-            mapTitles.append(val.toString().trimmed());
-    }
-
-    QJsonObject metaRows;
-    if (!meta.isEmpty()) {
-        const QJsonObject metaDoc = QJsonDocument::fromJson(meta).object();
-        if (metaDoc.value("build").toString() == m_build)
-            metaRows = metaDoc.value("rows").toObject();
-    }
-
     const int count = cards.size() / m_cardRecordSize;
-    m_entries.reserve(count);
-    QSet<QString> types;
+    if (count <= 0) return;
+
+    m_entries.reserve(m_entries.size() + count);
     const auto *raw = reinterpret_cast<const uchar *>(cards.constData());
+    const int baseId = chunkIndex * m_cardsPerFile;
 
     for (int i = 0; i < count; ++i) {
-        const int id = i + 1;
+        const int id = baseId + i + 1;
         const uchar *rec = raw + i * m_cardRecordSize;
 
         QString name;
         QString type;
         QString desc;
         QString tags;
-        const QJsonValue metaVal = metaRows.value(QString::number(id));
+        const QJsonValue metaVal = m_metaRows.value(QString::number(id));
         if (metaVal.isArray()) {
             const QJsonArray info = metaVal.toArray();
             const QString rating = info.at(4).toString().trimmed();
@@ -501,42 +586,56 @@ void ArchiveBrowser::parseAvatarArchive(const QByteArray &cards, const QByteArra
 
         Entry e;
         e.id = id;
-        e.position = i;
+        e.position = baseId + i;
         e.sha256 = QString::fromLatin1(QByteArray(reinterpret_cast<const char *>(rec), 32).toHex());
         e.maps = qFromLittleEndian<quint32>(rec + 32);
         e.cubes = qFromLittleEndian<quint32>(rec + 36);
-        e.sources = rec[40];
-        e.hasImage = rec[41] != 0;
-        e.pack = qFromLittleEndian<quint16>(rec + 42);
-        e.offset = qFromLittleEndian<quint32>(rec + 44);
-        e.length = qFromLittleEndian<quint32>(rec + 48);
-        const quint16 mapIdx = qFromLittleEndian<quint16>(rec + 52);
 
-        const QString mapTitle = mapIdx < mapTitles.size() ? mapTitles.at(mapIdx) : QString();
-        if (name.isEmpty())
-            name = !mapTitle.isEmpty() ? mapTitle : tr("Avatar %1").arg(id);
+        quint16 mapIdx = 0;
+        if (m_kind == Models) {
+            e.scale = readLittleFloat(rec + 40);
+            e.hasImage = rec[44] != 0;
+            e.pack = qFromLittleEndian<quint16>(rec + 45);
+            e.offset = qFromLittleEndian<quint32>(rec + 47);
+            e.length = qFromLittleEndian<quint32>(rec + 51);
+            mapIdx = qFromLittleEndian<quint16>(rec + 55);
+        } else {
+            e.sources = rec[40];
+            e.hasImage = rec[41] != 0;
+            e.pack = qFromLittleEndian<quint16>(rec + 42);
+            e.offset = qFromLittleEndian<quint32>(rec + 44);
+            e.length = qFromLittleEndian<quint32>(rec + 48);
+            mapIdx = qFromLittleEndian<quint16>(rec + 52);
+        }
+
+        const QString mapTitle = mapIdx < m_mapTitles.size() ? m_mapTitles.at(mapIdx) : QString();
+        if (name.isEmpty()) {
+            name = !mapTitle.isEmpty() ? mapTitle
+                : (m_kind == Models ? tr("Model %1").arg(id) : tr("Avatar %1").arg(id));
+        }
         e.name = name;
         e.type = type;
         e.author = mapTitle;
-        if (!type.isEmpty()) types.insert(type);
+        if (!type.isEmpty()) m_types.insert(type);
 
         e.searchText = (name + " " + type + " " + desc + " " + tags + " " + mapTitle + " " + QString::number(id)).toLower();
         m_entries.append(std::move(e));
     }
+}
 
-    // Populate avatar type filter while keeping current choice if possible
+void ArchiveBrowser::refreshTypeFilter()
+{
+    if (m_kind == Maps) return;
     const QString previous = m_filter->currentData().toString();
     QSignalBlocker blocker(m_filter);
     m_filter->clear();
     m_filter->addItem(tr("All types"), QString());
-    QStringList sortedTypes(types.cbegin(), types.cend());
+    QStringList sortedTypes(m_types.cbegin(), m_types.cend());
     sortedTypes.sort();
     for (const QString &t : sortedTypes)
         m_filter->addItem(capitalize(t), t);
     const int idx = m_filter->findData(previous);
     m_filter->setCurrentIndex(idx >= 0 ? idx : 0);
-
-    applyFilter();
 }
 
 void ArchiveBrowser::applyFilter()
@@ -553,7 +652,7 @@ void ArchiveBrowser::applyFilter()
         const Entry &e = m_entries[i];
         if (!filterVal.isEmpty()) {
             if (m_kind == Maps && e.site != filterVal) continue;
-            if (m_kind == Avatars && e.type != filterVal) continue;
+            if (m_kind != Maps && e.type != filterVal) continue;
         }
         bool match = true;
         for (const QString &word : words) {
@@ -598,7 +697,9 @@ void ArchiveBrowser::applyFilter()
     if (m_filtered.isEmpty()) {
         m_status->setText(m_entries.isEmpty()
             ? tr("Could not load the archive. Press F5 to try again.")
-            : (m_kind == Maps ? tr("No archived maps match your search.") : tr("No archived avatars match your search.")));
+            : (m_kind == Maps ? tr("No archived maps match your search.")
+                : m_kind == Avatars ? tr("No archived avatars match your search.")
+                : tr("No archived models match your search.")));
         m_status->show();
     } else {
         m_status->hide();
@@ -662,7 +763,7 @@ void ArchiveBrowser::fetchNextThumbnail()
 
         m_activeThumbnails++;
         const int gen = m_generation;
-        QNetworkReply *reply = m_net->get(archiveRequest(QUrl(urlStr), ThumbnailTimeoutMs));
+        QNetworkReply *reply = m_thumbNet->get(archiveRequest(QUrl(urlStr), ThumbnailTimeoutMs));
         connect(reply, &QNetworkReply::finished, this, [this, reply, row, urlStr, gen]() {
             reply->deleteLater();
             m_activeThumbnails = qMax(0, m_activeThumbnails - 1);
@@ -721,110 +822,179 @@ QString ArchiveBrowser::detailFor(const Entry &entry) const
     }
     QStringList parts;
     if (!entry.type.isEmpty()) parts << capitalize(entry.type);
+    if (m_kind == Models && entry.scale > 0.0f) parts << tr("scale %1").arg(QString::number(entry.scale));
     if (entry.cubes > 0) parts << tr("%1 cubes").arg(formatCount(entry.cubes));
     return parts.join(QString::fromUtf8(" \u00b7 "));
 }
 
 void ArchiveBrowser::updateActions()
 {
-    QListWidgetItem *item = m_list->currentItem();
-    if (!item) {
-        m_selected->setText(m_kind == Maps ? tr("No map selected") : tr("No avatar selected"));
+    const QList<QListWidgetItem *> selected = m_list->selectedItems();
+    const int count = int(selected.size());
+    if (count == 0) {
+        m_selected->setText(m_kind == Maps ? tr("No map selected")
+            : m_kind == Avatars ? tr("No avatar selected") : tr("No model selected"));
         m_detail->clear();
+        m_addButton->setText(m_kind == Maps ? tr("Add to my worlds")
+            : m_kind == Avatars ? tr("Add to my avatars") : tr("Add to my inventory"));
         m_addButton->setEnabled(false);
         return;
     }
-    const int entryIdx = item->data(IndexRole).toInt();
-    if (entryIdx < 0 || entryIdx >= m_entries.size()) {
-        m_addButton->setEnabled(false);
+
+    if (count == 1) {
+        const int entryIdx = selected.first()->data(IndexRole).toInt();
+        if (entryIdx < 0 || entryIdx >= m_entries.size()) {
+            m_addButton->setEnabled(false);
+            return;
+        }
+        const Entry &e = m_entries[entryIdx];
+        m_selected->setText(e.name);
+        m_detail->setText(detailFor(e));
+        m_addButton->setText(m_kind == Maps ? tr("Add to my worlds")
+            : m_kind == Avatars ? tr("Add to my avatars") : tr("Add to my inventory"));
+        m_addButton->setEnabled(!m_importing);
         return;
     }
-    const Entry &e = m_entries[entryIdx];
-    m_selected->setText(e.name);
-    m_detail->setText(detailFor(e));
+
+    m_selected->setText(tr("%n selected", nullptr, count));
+    m_detail->clear();
+    m_addButton->setText(m_kind == Maps ? tr("Add %n map(s)", nullptr, count)
+        : m_kind == Avatars ? tr("Add %n avatar(s)", nullptr, count)
+        : tr("Add %n model(s)", nullptr, count));
     m_addButton->setEnabled(!m_importing);
 }
 
-void ArchiveBrowser::requestImport()
+void ArchiveBrowser::requestImportSelection()
 {
     if (m_importing) return;
-    QListWidgetItem *item = m_list->currentItem();
-    if (!item) return;
-    const int entryIdx = item->data(IndexRole).toInt();
-    if (entryIdx < 0 || entryIdx >= m_entries.size()) return;
-    const Entry &e = m_entries[entryIdx];
+    QVector<int> indices;
+    const QList<QListWidgetItem *> selected = m_list->selectedItems();
+    indices.reserve(selected.size());
+    for (QListWidgetItem *item : selected) {
+        const int idx = item->data(IndexRole).toInt();
+        if (idx >= 0 && idx < m_entries.size())
+            indices.append(idx);
+    }
+    if (indices.isEmpty()) {
+        if (QListWidgetItem *current = m_list->currentItem()) {
+            const int idx = current->data(IndexRole).toInt();
+            if (idx >= 0 && idx < m_entries.size())
+                indices.append(idx);
+        }
+    }
+    if (!indices.isEmpty())
+        requestImportEntries(indices);
+}
+
+void ArchiveBrowser::requestImportEntries(const QVector<int> &entryIndices)
+{
+    if (entryIndices.isEmpty()) return;
 
     if (m_kind == Maps) {
-        requestMapDetail(e);
+        QVector<Entry> maps;
+        maps.reserve(entryIndices.size());
+        for (int idx : entryIndices) maps.append(m_entries[idx]);
+        requestMapDetails(maps);
         return;
     }
 
-    ImportRequest req;
-    req.kind = QStringLiteral("avatar");
-    req.name = e.name;
-    req.sha256 = e.sha256;
-    req.offset = e.offset;
-    req.length = e.length;
-    req.urls = {m_buildUrl.resolved(QUrl("packs/" + hexChunk(e.pack) + ".bin"))};
-    emit importRequested(req, thumbnailUrlFor(e));
+    for (int idx : entryIndices) {
+        const Entry &e = m_entries[idx];
+        ImportRequest req;
+        req.kind = m_kind == Models ? QStringLiteral("model") : QStringLiteral("avatar");
+        req.name = e.name;
+        req.sha256 = e.sha256;
+        req.offset = e.offset;
+        req.length = e.length;
+        if (m_kind == Models && e.scale > 0.0f)
+            req.scale = QString::number(e.scale);
+        req.urls = {m_buildUrl.resolved(QUrl("packs/" + hexChunk(e.pack) + ".bin"))};
+        emit importRequested(req, thumbnailUrlFor(e));
+    }
 }
 
-void ArchiveBrowser::requestMapDetail(const Entry &entry)
+void ArchiveBrowser::requestMapDetails(const QVector<Entry> &entries)
 {
-    const int chunk = entry.position / m_detailsPerFile;
-    const int inChunk = entry.position % m_detailsPerFile;
-    const QString name = entry.name;
-    const QUrl thumbUrl = thumbnailUrlFor(entry);
+    QSet<int> missingChunks;
+    for (const Entry &e : entries) {
+        const int chunk = e.position / m_detailsPerFile;
+        if (!m_mapDetails.contains(chunk))
+            missingChunks.insert(chunk);
+    }
 
-    auto emitFromChunk = [this, inChunk, name, thumbUrl](const QJsonArray &rows) {
-        const QJsonArray item = rows.at(inChunk).toArray();
-        const QJsonArray versions = item.at(3).toArray();
-        if (versions.isEmpty()) {
+    auto emitAll = [this, entries]() {
+        int missingLinks = 0;
+        for (const Entry &e : entries) {
+            const int chunk = e.position / m_detailsPerFile;
+            const int inChunk = e.position % m_detailsPerFile;
+            if (!m_mapDetails.contains(chunk)) {
+                missingLinks++;
+                continue;
+            }
+            const QJsonArray item = m_mapDetails.value(chunk).at(inChunk).toArray();
+            const QJsonArray versions = item.at(3).toArray();
+            if (versions.isEmpty()) {
+                missingLinks++;
+                continue;
+            }
+            const QJsonArray latestVersion = versions.first().toArray();
+            ImportRequest req;
+            req.kind = QStringLiteral("map");
+            req.name = e.name;
+            req.sha256 = latestVersion.at(0).toString().trimmed().toLower();
+            for (const QJsonValue &val : latestVersion.at(5).toArray()) {
+                const QUrl u(val.toString());
+                if (u.isValid() && (u.scheme() == "https" || u.scheme() == "http"))
+                    req.urls.append(u);
+            }
+            if (req.urls.isEmpty()) {
+                missingLinks++;
+                continue;
+            }
+            emit importRequested(req, thumbnailUrlFor(e));
+        }
+        if (missingLinks > 0 && entries.size() == 1)
             QMessageBox::warning(this, tr("Import"), tr("No download links are available for this map."));
-            return;
-        }
-        const QJsonArray latestVersion = versions.first().toArray();
-        ImportRequest req;
-        req.kind = QStringLiteral("map");
-        req.name = name;
-        req.sha256 = latestVersion.at(0).toString().trimmed().toLower();
-        for (const QJsonValue &val : latestVersion.at(5).toArray()) {
-            const QUrl u(val.toString());
-            if (u.isValid() && (u.scheme() == "https" || u.scheme() == "http"))
-                req.urls.append(u);
-        }
-        if (req.urls.isEmpty()) {
-            QMessageBox::warning(this, tr("Import"), tr("No download links are available for this map."));
-            return;
-        }
-        emit importRequested(req, thumbUrl);
     };
 
-    if (m_mapDetails.contains(chunk)) {
-        emitFromChunk(m_mapDetails.value(chunk));
+    if (missingChunks.isEmpty()) {
+        emitAll();
         return;
     }
 
     m_importing = true;
     m_addButton->setEnabled(false);
-    const QUrl detailUrl = m_buildUrl.resolved(QUrl(m_detailsPath + hexChunk(chunk) + ".json"));
-    QNetworkReply *reply = m_net->get(archiveRequest(detailUrl));
-    connect(reply, &QNetworkReply::finished, this, [this, reply, chunk, emitFromChunk]() {
-        reply->deleteLater();
-        m_importing = false;
-        updateActions();
-        if (reply->error() != QNetworkReply::NoError) {
-            QMessageBox::warning(this, tr("Import"), tr("Could not fetch map details: %1").arg(reply->errorString()));
-            return;
-        }
-        const QJsonArray rows = QJsonDocument::fromJson(reply->readAll()).array();
-        if (rows.isEmpty()) {
-            QMessageBox::warning(this, tr("Import"), tr("Could not read map details from the archive."));
-            return;
-        }
-        m_mapDetails.insert(chunk, rows);
-        emitFromChunk(rows);
-    });
+
+    struct BatchState {
+        int remaining = 0;
+        QString lastError;
+    };
+    auto state = std::make_shared<BatchState>();
+    state->remaining = int(missingChunks.size());
+
+    for (int chunk : std::as_const(missingChunks)) {
+        const QUrl detailUrl = m_buildUrl.resolved(QUrl(m_detailsPath + hexChunk(chunk) + ".json"));
+        QNetworkReply *reply = m_net->get(archiveRequest(detailUrl));
+        connect(reply, &QNetworkReply::finished, this, [this, reply, chunk, state, emitAll]() {
+            reply->deleteLater();
+            if (reply->error() == QNetworkReply::NoError) {
+                const QJsonArray rows = QJsonDocument::fromJson(reply->readAll()).array();
+                if (!rows.isEmpty()) m_mapDetails.insert(chunk, rows);
+            } else {
+                state->lastError = reply->errorString();
+            }
+            state->remaining--;
+            if (state->remaining == 0) {
+                m_importing = false;
+                updateActions();
+                if (!state->lastError.isEmpty() && m_mapDetails.isEmpty()) {
+                    QMessageBox::warning(this, tr("Import"), tr("Could not fetch map details: %1").arg(state->lastError));
+                    return;
+                }
+                emitAll();
+            }
+        });
+    }
 }
 
 QByteArray ArchiveBrowser::readCache(const QString &fileName) const

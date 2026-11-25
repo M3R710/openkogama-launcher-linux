@@ -7,6 +7,7 @@
 #include "launchdialog.h"
 #include "assetinstaller.h"
 #include "contentimporter.h"
+#include "downloadmanager.h"
 #include "settingsdialog.h"
 #include "worldsdialog.h"
 #include "pluginspage.h"
@@ -141,6 +142,39 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
     setWindowTitle(tr("OpenKogama Launcher"));
     ui->versionCombo->setPlaceholderText(tr("No versions installed"));
+    m_downloads = new DownloadManager(this);
+    m_downloadsPopup = new DownloadsPopup(m_downloads, this);
+    m_downloadsButton = new QPushButton(tr("Downloads"), ui->headerBar);
+    m_downloadsButton->setObjectName("downloadsButton");
+    m_downloadsButton->setToolTip(tr("Show ongoing and recent downloads"));
+    ui->headerLayout->addWidget(m_downloadsButton);
+    connect(m_downloadsButton, &QPushButton::clicked, this, [this]() {
+        if (m_downloadsPopup->isVisible()) m_downloadsPopup->hide();
+        else m_downloadsPopup->showBelow(m_downloadsButton);
+    });
+    connect(m_downloads, &DownloadManager::changed, this, &MainWindow::updateDownloadsButton);
+    connect(m_downloads, &DownloadManager::jobCompleted, this, [this](const QString &kind, int id, const QUrl &thumbnailUrl) {
+        if (kind == "map" && thumbnailUrl.isValid() && m_worlds)
+            m_worlds->setArchiveThumbnail(id, thumbnailUrl);
+    });
+    connect(m_downloads, &DownloadManager::batchSettled, this, [this](const QString &kind, int lastId) {
+        if (m_worlds) m_worlds->refreshAfterImport(kind, lastId);
+    });
+    connect(m_downloadsPopup, &DownloadsPopup::showRequested, this, [this](const QString &kind, int id) {
+        if (!m_worlds) return;
+        if (kind == "map") {
+            ui->mainTabs->setCurrentWidget(ui->playTab);
+            ui->playStack->setCurrentWidget(ui->worldsPage);
+            m_worlds->showWorlds(id);
+        } else if (kind == "avatar") {
+            ui->mainTabs->setCurrentWidget(ui->avatarsTab);
+            m_worlds->showAvatars(id);
+        } else {
+            ui->mainTabs->setCurrentWidget(ui->inventoryTab);
+            m_worlds->showInventory(id);
+        }
+    });
+    updateDownloadsButton();
     ui->mainTabs->setCornerWidget(ui->headerBar, Qt::TopRightCorner);
     m_servers = new ServersPage(this);
     ui->mainTabs->insertTab(1, m_servers, tr("&Servers"));
@@ -781,6 +815,14 @@ void MainWindow::checkForUpdates() {
     Updater::check(this, m_updates, false);
 }
 
+void MainWindow::updateDownloadsButton() {
+    const int active = m_downloads ? m_downloads->activeCount() : 0;
+    m_downloadsButton->setText(active > 0 ? tr("Downloads (%1)").arg(active) : tr("Downloads"));
+    m_downloadsButton->setProperty("active", active > 0);
+    m_downloadsButton->style()->unpolish(m_downloadsButton);
+    m_downloadsButton->style()->polish(m_downloadsButton);
+}
+
 void MainWindow::openImport(const ImportRequest &request, bool confirm, const QUrl &thumbnailUrl) {
     const QString path = ui->versionCombo->currentData().toString();
     if (path.isEmpty()) {
@@ -796,48 +838,10 @@ void MainWindow::openImport(const ImportRequest &request, bool confirm, const QU
     }
     if (!launchInstance(path)) return;
 
-    const QString title = request.name.isEmpty() ? tr("this item") : QStringLiteral("\"%1\"").arg(request.name);
-    QPointer<QProgressDialog> progress = new QProgressDialog(tr("Adding %1 to KoGaMa...").arg(title), tr("Cancel"), 0, 100, this);
-    progress->setWindowTitle(tr("Import"));
-    progress->setWindowModality(Qt::WindowModal);
-    progress->setMinimumDuration(0);
-    progress->setAutoClose(false);
-    progress->setAutoReset(false);
-    progress->show();
-
-    const QString kind = request.kind;
     const QString client = clientVersion(instances->item(ui->versionCombo->currentIndex()));
-    auto *importer = new ContentImporter(client, this);
-    connect(importer, &ContentImporter::progress, this, [progress](qint64 done, qint64 total) {
-        if (!progress || total <= 0) return;
-        progress->setValue(int(qMin<qint64>(100, done * 100 / total)));
-    });
-    connect(progress.data(), &QProgressDialog::canceled, importer, &ContentImporter::cancel);
-    connect(importer, &ContentImporter::finished, this, [this, importer, progress, kind, thumbnailUrl](bool ok, const QString &error, int id) {
-        importer->deleteLater();
-        if (progress) {
-            progress->close();
-            progress->deleteLater();
-        }
-        if (!ok) {
-            if (!error.isEmpty()) QMessageBox::warning(this, tr("Import"), error);
-            return;
-        }
-        if (!m_worlds) return;
-        if (kind == "map") {
-            if (thumbnailUrl.isValid()) m_worlds->setArchiveThumbnail(id, thumbnailUrl);
-            ui->mainTabs->setCurrentWidget(ui->playTab);
-            ui->playStack->setCurrentWidget(ui->worldsPage);
-            m_worlds->showWorlds(id);
-        } else if (kind == "avatar") {
-            ui->mainTabs->setCurrentWidget(ui->avatarsTab);
-            m_worlds->showAvatars(id);
-        } else {
-            ui->mainTabs->setCurrentWidget(ui->inventoryTab);
-            m_worlds->showInventory(id);
-        }
-    });
-    importer->start(request);
+    m_downloads->enqueue(request, thumbnailUrl, client);
+    if (confirm)
+        m_downloadsPopup->showBelow(m_downloadsButton);
 }
 
 void MainWindow::editServerSettings() {

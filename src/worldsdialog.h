@@ -36,6 +36,7 @@ public:
     void showWorlds(int select = -1);
     void showAvatars(int select = -1);
     void showInventory(int select = -1);
+    void refreshAfterImport(const QString &kind, int select);
     void setArchiveThumbnail(int world, const QUrl &url);
     void setHostedWorld(int world);
     void reject() override;
@@ -119,6 +120,9 @@ private:
     QTabBar *m_avatarsView = nullptr;
     QStackedWidget *m_avatarsStack = nullptr;
     ArchiveBrowser *m_avatarsArchive = nullptr;
+    QTabBar *m_inventoryView = nullptr;
+    QStackedWidget *m_inventoryStack = nullptr;
+    ArchiveBrowser *m_modelsArchive = nullptr;
     QQueue<int> m_pendingModels;
     QSet<int> m_queuedModels;
     int m_activeModels = 0;

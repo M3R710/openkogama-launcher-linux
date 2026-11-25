@@ -238,8 +238,20 @@
         <translation>Harita arşivi yükleniyor...</translation>
     </message>
     <message>
+        <source>Search archived models...</source>
+        <translation>Arşivdeki modellerde ara...</translation>
+    </message>
+    <message>
+        <source>Archived models</source>
+        <translation>Arşivlenmiş modeller</translation>
+    </message>
+    <message>
         <source>Loading avatars archive...</source>
         <translation>Avatar arşivi yükleniyor...</translation>
+    </message>
+    <message>
+        <source>Loading models archive...</source>
+        <translation>Model arşivi yükleniyor...</translation>
     </message>
     <message>
         <source>Could not load the archive. Press F5 to try again.</source>
@@ -254,12 +266,20 @@
         <translation>Avatar %1</translation>
     </message>
     <message>
+        <source>Model %1</source>
+        <translation>Model %1</translation>
+    </message>
+    <message>
         <source>No archived maps match your search.</source>
         <translation>Aramanla eşleşen arşivlenmiş harita yok.</translation>
     </message>
     <message>
         <source>No archived avatars match your search.</source>
         <translation>Aramanla eşleşen arşivlenmiş avatar yok.</translation>
+    </message>
+    <message>
+        <source>No archived models match your search.</source>
+        <translation>Aramanla eşleşen arşivlenmiş model yok.</translation>
     </message>
     <message>
         <source>%1 plays</source>
@@ -280,12 +300,48 @@
         <translation>%1 tarafından</translation>
     </message>
     <message>
+        <source>scale %1</source>
+        <translation>ölçek %1</translation>
+    </message>
+    <message>
         <source>No map selected</source>
         <translation>Harita seçilmedi</translation>
     </message>
     <message>
         <source>No avatar selected</source>
         <translation>Avatar seçilmedi</translation>
+    </message>
+    <message>
+        <source>No model selected</source>
+        <translation>Model seçilmedi</translation>
+    </message>
+    <message>
+        <source>Add to my inventory</source>
+        <translation>Envanterime ekle</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n selected</source>
+        <translation>
+            <numerusform>%n öğe seçili</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Add %n map(s)</source>
+        <translation>
+            <numerusform>%n harita ekle</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Add %n avatar(s)</source>
+        <translation>
+            <numerusform>%n avatar ekle</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Add %n model(s)</source>
+        <translation>
+            <numerusform>%n model ekle</numerusform>
+        </translation>
     </message>
     <message>
         <source>Import</source>
@@ -298,10 +354,6 @@
     <message>
         <source>Could not fetch map details: %1</source>
         <translation>Harita ayrıntıları alınamadı: %1</translation>
-    </message>
-    <message>
-        <source>Could not read map details from the archive.</source>
-        <translation>Harita ayrıntıları arşivden okunamadı.</translation>
     </message>
 </context>
 <context>
@@ -578,6 +630,76 @@
     <message>
         <source>Thanks to</source>
         <translation>Teşekkürler</translation>
+    </message>
+</context>
+<context>
+    <name>DownloadManager</name>
+    <message>
+        <source>Map</source>
+        <translation>Harita</translation>
+    </message>
+    <message>
+        <source>Avatar</source>
+        <translation>Avatar</translation>
+    </message>
+    <message>
+        <source>Model</source>
+        <translation>Model</translation>
+    </message>
+</context>
+<context>
+    <name>DownloadsPopup</name>
+    <message>
+        <source>Downloads</source>
+        <translation>İndirilenler</translation>
+    </message>
+    <message>
+        <source>Clear</source>
+        <translation>Temizle</translation>
+    </message>
+    <message>
+        <source>Cancel all</source>
+        <translation>Tümünü iptal et</translation>
+    </message>
+    <message>
+        <source>No downloads yet.</source>
+        <translation>Henüz indirme yok.</translation>
+    </message>
+    <message>
+        <source>Queued</source>
+        <translation>Sırada</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>İptal</translation>
+    </message>
+    <message>
+        <source>Downloading... %1%</source>
+        <translation>İndiriliyor... %1%</translation>
+    </message>
+    <message>
+        <source>Downloading...</source>
+        <translation>İndiriliyor...</translation>
+    </message>
+    <message>
+        <source>Added</source>
+        <translation>Eklendi</translation>
+    </message>
+    <message>
+        <source>Show</source>
+        <translation>Göster</translation>
+    </message>
+    <message>
+        <source>Failed</source>
+        <translation>Başarısız</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Tekrar dene</translation>
+    </message>
+    <message>
+        <source>Cancelled</source>
+        <translation>İptal edildi</translation>
     </message>
 </context>
 <context>
@@ -1003,6 +1125,14 @@ Paket yöneticinle Wine'ı kur (örneğin "sudo apt install wine") ve tekrar den
         <translation>Yüklü sürüm yok</translation>
     </message>
     <message>
+        <source>Downloads</source>
+        <translation>İndirilenler</translation>
+    </message>
+    <message>
+        <source>Show ongoing and recent downloads</source>
+        <translation>Devam eden ve son indirmeleri göster</translation>
+    </message>
+    <message>
         <source>&amp;Servers</source>
         <translation>&amp;Sunucular</translation>
     </message>
@@ -1175,6 +1305,10 @@ Paket yöneticinle Wine'ı kur (örneğin "sudo apt install wine") ve tekrar den
         <translation>%1 sunucusuna katıl?</translation>
     </message>
     <message>
+        <source>Downloads (%1)</source>
+        <translation>İndirilenler (%1)</translation>
+    </message>
+    <message>
         <source>Import</source>
         <translation>İçe aktar</translation>
     </message>
@@ -1193,14 +1327,6 @@ Paket yöneticinle Wine'ı kur (örneğin "sudo apt install wine") ve tekrar den
     <message>
         <source>Add this model to your inventory?</source>
         <translation>Bu model envanterine eklensin mi?</translation>
-    </message>
-    <message>
-        <source>this item</source>
-        <translation>bu öğe</translation>
-    </message>
-    <message>
-        <source>Adding %1 to KoGaMa...</source>
-        <translation>%1 KoGaMa'ya ekleniyor...</translation>
     </message>
     <message>
         <source>Cancel</source>
@@ -2027,6 +2153,18 @@ Paket yöneticinle Wine'ı kur (örneğin "sudo apt install wine") ve tekrar den
     <message>
         <source>Browse and download archived KoGaMa avatars</source>
         <translation>Arşivlenmiş KoGaMa avatarlarına göz at ve indir</translation>
+    </message>
+    <message>
+        <source>My inventory</source>
+        <translation>Envanterim</translation>
+    </message>
+    <message>
+        <source>Models saved on your computer</source>
+        <translation>Bilgisayarında kayıtlı modeller</translation>
+    </message>
+    <message>
+        <source>Browse and download archived KoGaMa models</source>
+        <translation>Arşivlenmiş KoGaMa modellerine göz at ve indir</translation>
     </message>
     <message>
         <source>Scale...</source>
