@@ -81,6 +81,7 @@ private:
     void applyFilter();
     void appendPage();
     void updateActions();
+    void showContextMenu(const QPoint &pos);
     void requestImportSelection();
     void requestImportEntries(const QVector<int> &entryIndices);
     void requestMapDetails(const QVector<Entry> &entries);

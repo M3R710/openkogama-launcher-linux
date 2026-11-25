@@ -5,11 +5,14 @@
 
 #include <QAbstractItemView>
 #include <QApplication>
+#include <QClipboard>
 #include <QComboBox>
+#include <QDesktopServices>
 #include <QDir>
 #include <QEvent>
 #include <QFile>
 #include <QFrame>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QImage>
 #include <QJsonArray>
@@ -18,6 +21,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMenu>
 #include <QMessageBox>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -209,6 +213,7 @@ ArchiveBrowser::ArchiveBrowser(Kind kind, QWidget *parent)
 
     connect(m_list, &QListWidget::currentItemChanged, this, &ArchiveBrowser::updateActions);
     connect(m_list, &QListWidget::itemSelectionChanged, this, &ArchiveBrowser::updateActions);
+    connect(m_list, &QListWidget::customContextMenuRequested, this, &ArchiveBrowser::showContextMenu);
     connect(m_list, &QListWidget::itemActivated, this, [this](QListWidgetItem *item) {
         if (!item) return;
         const int idx = item->data(IndexRole).toInt();
@@ -862,6 +867,69 @@ void ArchiveBrowser::updateActions()
         : m_kind == Avatars ? tr("Add %n avatar(s)", nullptr, count)
         : tr("Add %n model(s)", nullptr, count));
     m_addButton->setEnabled(!m_importing);
+}
+
+void ArchiveBrowser::showContextMenu(const QPoint &pos)
+{
+    QListWidgetItem *item = m_list->itemAt(pos);
+    if (!item) {
+        QMenu menu(this);
+        menu.addAction(tr("Refresh"), this, &ArchiveBrowser::reload);
+        menu.exec(m_list->viewport()->mapToGlobal(pos));
+        return;
+    }
+    if (!item->isSelected()) {
+        m_list->clearSelection();
+        m_list->setCurrentItem(item);
+        item->setSelected(true);
+    }
+
+    const QList<QListWidgetItem *> sel = m_list->selectedItems();
+    const int count = int(sel.size());
+    const bool single = count == 1;
+    const int entryIdx = item->data(IndexRole).toInt();
+    const bool validEntry = entryIdx >= 0 && entryIdx < m_entries.size();
+
+    QMenu menu(this);
+    const QString addText = single
+        ? (m_kind == Maps ? tr("Add to my worlds") : m_kind == Avatars ? tr("Add to my avatars") : tr("Add to my inventory"))
+        : (m_kind == Maps ? tr("Add %n map(s)", nullptr, count)
+            : m_kind == Avatars ? tr("Add %n avatar(s)", nullptr, count)
+            : tr("Add %n model(s)", nullptr, count));
+    QAction *add = menu.addAction(addText);
+    add->setEnabled(!m_importing);
+
+    QAction *copyName = nullptr;
+    QAction *byAuthor = nullptr;
+    QAction *openWeb = nullptr;
+    if (single && validEntry) {
+        const Entry &e = m_entries[entryIdx];
+        menu.addSeparator();
+        copyName = menu.addAction(tr("Copy name"));
+        if (m_kind == Maps && !e.author.isEmpty())
+            byAuthor = menu.addAction(tr("More by %1").arg(e.author));
+        openWeb = menu.addAction(tr("Open on openkogama.org"));
+    }
+
+    QAction *chosen = menu.exec(m_list->viewport()->mapToGlobal(pos));
+    if (!chosen) return;
+    if (chosen == add) {
+        requestImportSelection();
+    } else if (chosen == copyName && validEntry) {
+        QGuiApplication::clipboard()->setText(m_entries[entryIdx].name);
+    } else if (chosen == byAuthor && validEntry) {
+        m_search->setText(m_entries[entryIdx].author);
+    } else if (chosen == openWeb && validEntry) {
+        const Entry &e = m_entries[entryIdx];
+        QString url;
+        if (m_kind == Maps)
+            url = QStringLiteral("https://openkogama.org/maps/?q=") + QString::fromLatin1(QUrl::toPercentEncoding(e.id > 0 ? QString::number(e.id) : e.name));
+        else if (m_kind == Avatars)
+            url = QStringLiteral("https://openkogama.org/avatars/?q=") + QString::fromLatin1(QUrl::toPercentEncoding(e.name));
+        else
+            url = QStringLiteral("https://openkogama.org/models/?q=") + QString::fromLatin1(QUrl::toPercentEncoding(e.name));
+        QDesktopServices::openUrl(QUrl(url));
+    }
 }
 
 void ArchiveBrowser::requestImportSelection()
