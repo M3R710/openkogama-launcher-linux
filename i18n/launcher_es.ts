@@ -186,6 +186,10 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Search archived models...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>All regions</source>
         <translation type="unfinished"></translation>
     </message>
@@ -226,23 +230,11 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Add to my worlds</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Add to my avatars</source>
+        <source>Archived models</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Loading maps archive...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Search archived models...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Archived models</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -262,12 +254,12 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Avatar %1</source>
-        <translation type="unfinished">Avatar %1</translation>
-    </message>
-    <message>
         <source>Model %1</source>
         <translation type="unfinished">Modelo %1</translation>
+    </message>
+    <message>
+        <source>Avatar %1</source>
+        <translation type="unfinished">Avatar %1</translation>
     </message>
     <message>
         <source>No archived maps match your search.</source>
@@ -317,6 +309,14 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Add to my worlds</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add to my avatars</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Add to my inventory</source>
         <translation type="unfinished"></translation>
     </message>
@@ -347,6 +347,22 @@
             <numerusform></numerusform>
             <numerusform></numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Refresh</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Copy name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>More by %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open on openkogama.org</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Import</source>
