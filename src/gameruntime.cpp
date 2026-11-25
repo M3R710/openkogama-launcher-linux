@@ -92,7 +92,8 @@ QList<GameRuntime::ProtonBuild> scanProtonDirs()
     };
 
     QList<GameRuntime::ProtonBuild> builds;
-    QSet<QString> seen;
+    QSet<QString> seenPaths;
+    QSet<QString> seenNames;
 
     for (const QString &root : roots) {
         QDir dir(root);
@@ -102,8 +103,10 @@ QList<GameRuntime::ProtonBuild> scanProtonDirs()
             const QString script = resolveProtonScript(dir.filePath(entry));
             if (script.isEmpty()) continue;
             const QString canon = QFileInfo(script).canonicalFilePath();
-            if (seen.contains(canon)) continue;
-            seen.insert(canon);
+            const QString lowerName = entry.toLower();
+            if (seenPaths.contains(canon) || seenNames.contains(lowerName)) continue;
+            seenPaths.insert(canon);
+            seenNames.insert(lowerName);
             builds.append({entry, script});
         }
     }
