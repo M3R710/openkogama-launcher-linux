@@ -74,6 +74,9 @@ private:
     QString hostedMode(int world) const;
     void loadAvatars(int select = 0, bool refreshPictures = false);
     void loadAvatarPicture(QListWidgetItem *item, int avatar, const QString &version);
+    void enqueueAvatarPreview(int avatar);
+    void fetchNextAvatarPreview();
+    void renderAvatarPreview(int avatar);
     void useAvatar();
     void editAvatar();
     void activateAvatar(int avatar, std::function<void()> done);
@@ -129,6 +132,10 @@ private:
     QSet<int> m_queuedModels;
     int m_activeModels = 0;
     int m_inventoryGeneration = 0;
+    QQueue<int> m_pendingAvatars;
+    QSet<int> m_queuedAvatars;
+    int m_activeAvatars = 0;
+    int m_avatarGeneration = 0;
 };
 
 #endif // WORLDSDIALOG_H

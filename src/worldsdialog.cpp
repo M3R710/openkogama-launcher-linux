@@ -413,6 +413,9 @@ WorldsDialog::WorldsDialog(const QString &path, const QString &exe, QProcess *se
             m_pendingModels.clear();
             m_queuedModels.clear();
             m_inventoryGeneration++;
+            m_pendingAvatars.clear();
+            m_queuedAvatars.clear();
+            m_avatarGeneration++;
             loadWorlds(world, true);
             loadAvatars(avatar, true);
             loadInventory(item, true);
@@ -1008,6 +1011,11 @@ void WorldsDialog::loadAvatars(int select, bool refreshPictures) {
         for (int i = 0; i < ui->avatarsList->count(); ++i)
             shown.append(ui->avatarsList->item(i)->data(Qt::UserRole).toInt());
         QSignalBlocker blocker(ui->avatarsList);
+        if (refreshPictures) {
+            m_pendingAvatars.clear();
+            m_queuedAvatars.clear();
+            m_avatarGeneration++;
+        }
         if (ids != shown) {
             const QIcon empty = TileGrid::icon(TileGrid::placeholder(TileGrid::SquareImage, palette().color(QPalette::Button)));
             syncList(ui->avatarsList, ids, empty, tr("No picture yet, take one with the camera in the avatar editor"));
@@ -1042,18 +1050,86 @@ void WorldsDialog::loadAvatars(int select, bool refreshPictures) {
 void WorldsDialog::loadAvatarPicture(QListWidgetItem *item, int avatar, const QString &version) {
     QPointer<QListWidget> list = ui->avatarsList;
     QNetworkReply *reply = m_mediaNet->get(QNetworkRequest(QUrl(LocalServerUrl + "/images/1/" + QString::number(avatar) + ".png?v=" + version)));
-    connect(reply, &QNetworkReply::finished, this, [reply, list, item, avatar]() {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, list, item, avatar]() {
         reply->deleteLater();
         QByteArray data = reply->readAll();
         QPixmap image;
-        if (reply->error() != QNetworkReply::NoError || !list) return;
+        if (!list) return;
+        if (reply->error() != QNetworkReply::NoError || !image.loadFromData(data)) {
+            if (QListWidgetItem *found = findItemById(list, avatar); found && found->data(ImageRole).toByteArray().isEmpty())
+                enqueueAvatarPreview(avatar);
+            return;
+        }
         for (int i = 0; i < list->count(); ++i) {
             if (list->item(i) != item || item->data(Qt::UserRole).toInt() != avatar || item->data(ImageRole).toByteArray() == data) continue;
-            if (!image.loadFromData(data)) return;
             item->setData(ImageRole, data);
             item->setIcon(TileGrid::icon(TileGrid::cover(image, TileGrid::SquareImage)));
             item->setToolTip(QString());
         }
+    });
+}
+
+void WorldsDialog::enqueueAvatarPreview(int avatar) {
+    if (m_queuedAvatars.contains(avatar)) return;
+    m_queuedAvatars.insert(avatar);
+    m_pendingAvatars.enqueue(avatar);
+    fetchNextAvatarPreview();
+}
+
+void WorldsDialog::fetchNextAvatarPreview() {
+    while (m_activeAvatars < MaxConcurrentModels && !m_pendingAvatars.isEmpty()) {
+        const int avatar = m_pendingAvatars.dequeue();
+        if (!findItemById(ui->avatarsList, avatar)) {
+            m_queuedAvatars.remove(avatar);
+            continue;
+        }
+        renderAvatarPreview(avatar);
+    }
+}
+
+void WorldsDialog::renderAvatarPreview(int avatar) {
+    m_activeAvatars++;
+    const int gen = m_avatarGeneration;
+    QUrl url(LocalServerUrl + "/api/avatars/export");
+    QUrlQuery query;
+    query.addQueryItem("id", QString::number(avatar));
+    url.setQuery(query);
+
+    QNetworkReply *reply = m_mediaNet->get(QNetworkRequest(url));
+    connect(reply, &QNetworkReply::finished, this, [this, reply, avatar, gen]() {
+        reply->deleteLater();
+        auto done = [this, avatar, gen]() {
+            if (gen == m_avatarGeneration)
+                m_queuedAvatars.remove(avatar);
+            m_activeAvatars = qMax(0, m_activeAvatars - 1);
+            fetchNextAvatarPreview();
+        };
+        const QByteArray data = reply->readAll();
+        QListWidgetItem *item = findItemById(ui->avatarsList, avatar);
+        if (gen != m_avatarGeneration || reply->error() != QNetworkReply::NoError || !item || data.isEmpty()) {
+            done();
+            return;
+        }
+        if (item->data(ImageRole).toByteArray() == data) {
+            done();
+            return;
+        }
+        item->setData(ImageRole, data);
+
+        auto *watcher = new QFutureWatcher<QImage>(this);
+        connect(watcher, &QFutureWatcher<QImage>::finished, this, [this, watcher, avatar, gen, data, done]() {
+            watcher->deleteLater();
+            const QImage image = watcher->result();
+            QListWidgetItem *target = findItemById(ui->avatarsList, avatar);
+            if (gen == m_avatarGeneration && !image.isNull() && target && target->data(ImageRole).toByteArray() == data) {
+                QPixmap tile = TileGrid::backdrop(TileGrid::SquareImage, palette().color(QPalette::Button));
+                QPainter(&tile).drawImage(0, 0, image);
+                target->setIcon(TileGrid::icon(tile));
+                target->setToolTip(QString());
+            }
+            done();
+        });
+        watcher->setFuture(QtConcurrent::run([data]() { return ModelPreview::renderAvatar(data, TileGrid::SquareImage); }));
     });
 }
 

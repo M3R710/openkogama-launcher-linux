@@ -147,6 +147,8 @@ MainWindow::MainWindow(QWidget *parent)
     m_downloadsButton = new QPushButton(tr("Downloads"), ui->headerBar);
     m_downloadsButton->setObjectName("downloadsButton");
     m_downloadsButton->setToolTip(tr("Show ongoing and recent downloads"));
+    ui->versionCombo->setMinimumWidth(180);
+    ui->headerBar->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
     ui->headerLayout->addWidget(m_downloadsButton);
     connect(m_downloadsButton, &QPushButton::clicked, this, [this]() {
         if (m_downloadsPopup->isVisible()) m_downloadsPopup->hide();
@@ -821,6 +823,9 @@ void MainWindow::updateDownloadsButton() {
     m_downloadsButton->setProperty("active", active > 0);
     m_downloadsButton->style()->unpolish(m_downloadsButton);
     m_downloadsButton->style()->polish(m_downloadsButton);
+    m_downloadsButton->adjustSize();
+    ui->headerBar->adjustSize();
+    ui->mainTabs->setCornerWidget(ui->headerBar, Qt::TopRightCorner);
 }
 
 void MainWindow::openImport(const ImportRequest &request, bool confirm, const QUrl &thumbnailUrl) {
