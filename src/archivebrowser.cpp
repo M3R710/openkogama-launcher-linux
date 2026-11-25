@@ -224,7 +224,7 @@ ArchiveBrowser::ArchiveBrowser(Kind kind, QWidget *parent)
     connect(m_list, &QListWidget::itemSelectionChanged, this, &ArchiveBrowser::updateActions);
     connect(m_list, &QListWidget::customContextMenuRequested, this, &ArchiveBrowser::showContextMenu);
     connect(m_list, &QListWidget::itemActivated, this, [this](QListWidgetItem *item) {
-        if (!item) return;
+        if (!item || m_importing) return;
         const int idx = item->data(IndexRole).toInt();
         if (idx >= 0 && idx < m_entries.size())
             requestImportEntries({idx});
@@ -1050,6 +1050,11 @@ void ArchiveBrowser::requestMapDetails(const QVector<Entry> &entries)
             req.name = e.name;
             req.published = e.published;
             req.sha256 = latestVersion.at(0).toString().trimmed().toLower();
+            static const QRegularExpression sha(QStringLiteral("^[0-9a-f]{64}$"));
+            if (!sha.match(req.sha256).hasMatch()) {
+                missingLinks++;
+                continue;
+            }
             for (const QJsonValue &val : latestVersion.at(5).toArray()) {
                 const QUrl u(val.toString());
                 if (u.isValid() && u.scheme() == "https")
