@@ -2315,7 +2315,7 @@ Paket yöneticinle Wine&apos;ı kur (örneğin &quot;sudo apt install wine&quot;
         <translation>Bu dünya yeniden adlandırılamadı</translation>
     </message>
     <message numerus="yes">
-        <source>Delete %n world(s)? This can't be undone.</source>
+        <source>Delete %n world(s)? This can&apos;t be undone.</source>
         <translation>
             <numerusform>%n dünya silinsin mi? Bu işlem geri alınamaz.</numerusform>
         </translation>
@@ -2329,7 +2329,7 @@ Paket yöneticinle Wine&apos;ı kur (örneğin &quot;sudo apt install wine&quot;
         <translation>Bazı dünyalar oyunda açık olduğu için silinemedi. Önce onları kapat.</translation>
     </message>
     <message numerus="yes">
-        <source>Delete %n avatar(s)? This can't be undone.</source>
+        <source>Delete %n avatar(s)? This can&apos;t be undone.</source>
         <translation>
             <numerusform>%n avatar silinsin mi? Bu işlem geri alınamaz.</numerusform>
         </translation>
@@ -2365,8 +2365,8 @@ Paket yöneticinle Wine&apos;ı kur (örneğin &quot;sudo apt install wine&quot;
         </translation>
     </message>
     <message>
-        <source>Delete "%1"? This can't be undone.</source>
-        <translation>"%1" silinsin mi? Bu işlem geri alınamaz.</translation>
+        <source>Delete &quot;%1&quot;? This can&apos;t be undone.</source>
+        <translation>&quot;%1&quot; silinsin mi? Bu işlem geri alınamaz.</translation>
     </message>
     <message>
         <source>Play</source>
@@ -2563,7 +2563,7 @@ Paket yöneticinle Wine&apos;ı kur (örneğin &quot;sudo apt install wine&quot;
         <translation>Bu öğe yeniden adlandırılamadı</translation>
     </message>
     <message numerus="yes">
-        <source>Delete %n item(s) from your inventory? This can't be undone.</source>
+        <source>Delete %n item(s) from your inventory? This can&apos;t be undone.</source>
         <translation>
             <numerusform>Envanterinden %n öğe silinsin mi? Bu işlem geri alınamaz.</numerusform>
         </translation>
