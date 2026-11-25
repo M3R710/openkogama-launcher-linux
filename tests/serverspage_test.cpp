@@ -662,6 +662,12 @@ private slots:
         QCOMPARE(proc.program(), QFileInfo(fakeProton).absoluteFilePath());
         QCOMPARE(proc.arguments(), QStringList({"run", fakeExe, "-logFile", "Z:\\tmp\\game.log"}));
         QCOMPARE(proc.processEnvironment().value("STEAM_COMPAT_DATA_PATH"), QDir::cleanPath(compat));
+        QCOMPARE(proc.processEnvironment().value("STEAM_COMPAT_CLIENT_INSTALL_PATH"), QDir::cleanPath(compat));
+
+        // Only builds inside OpenKogama's managed proton/runtimes directory are listed
+        const QString managedRoot = QDir::cleanPath(Paths::data() + "/proton/runtimes") + "/";
+        for (const GameRuntime::ProtonBuild &b : GameRuntime::installedProtons())
+            QVERIFY(QDir::cleanPath(b.path).startsWith(managedRoot));
     }
 #endif
 

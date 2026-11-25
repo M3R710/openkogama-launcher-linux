@@ -81,23 +81,21 @@ QVersionNumber protonVersionKey(const QString &name)
     return QVersionNumber(nums);
 }
 
+bool isManagedProton(const QString &script)
+{
+    if (script.isEmpty()) return false;
+    const QString root = QDir::cleanPath(managedRuntimesDir()) + "/";
+    return QDir::cleanPath(script).startsWith(root);
+}
+
 QList<GameRuntime::ProtonBuild> scanProtonDirs()
 {
-    const QString home = QDir::homePath();
-    const QStringList roots = {
-        managedRuntimesDir(),
-        home + "/.local/share/Steam/compatibilitytools.d",
-        home + "/.steam/root/compatibilitytools.d",
-        home + "/.var/app/com.valvesoftware.Steam/.local/share/Steam/compatibilitytools.d",
-    };
-
     QList<GameRuntime::ProtonBuild> builds;
     QSet<QString> seenPaths;
     QSet<QString> seenNames;
 
-    for (const QString &root : roots) {
-        QDir dir(root);
-        if (!dir.exists()) continue;
+    QDir dir(managedRuntimesDir());
+    if (dir.exists()) {
         for (const QString &entry : dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
             if (!entry.startsWith(QStringLiteral("GE-Proton"), Qt::CaseInsensitive)) continue;
             const QString script = resolveProtonScript(dir.filePath(entry));
@@ -124,14 +122,6 @@ QString steamClientInstallPath()
 {
     const QString configured = qEnvironmentVariable("STEAM_COMPAT_CLIENT_INSTALL_PATH").trimmed();
     if (!configured.isEmpty()) return QDir::cleanPath(configured);
-    const QString home = QDir::homePath();
-    for (const QString &candidate : {
-             home + "/.local/share/Steam",
-             home + "/.steam/root",
-             home + "/.var/app/com.valvesoftware.Steam/.local/share/Steam",
-         }) {
-        if (QDir(candidate).exists()) return QDir::cleanPath(candidate);
-    }
     return compatDataPath();
 }
 
@@ -226,7 +216,7 @@ QString activeProton()
 #else
     if (const QString env = resolveProtonScript(qEnvironmentVariable("OPENKOGAMA_PROTON")); !env.isEmpty())
         return env;
-    if (const QString configured = resolveProtonScript(Settings::protonPath()); !configured.isEmpty())
+    if (const QString configured = resolveProtonScript(Settings::protonPath()); isManagedProton(configured))
         return configured;
     const QList<ProtonBuild> found = scanProtonDirs();
     return found.isEmpty() ? QString() : found.first().path;
