@@ -71,11 +71,13 @@ QString resolveProtonScript(const QString &candidate)
 
 QVersionNumber protonVersionKey(const QString &name)
 {
-    static const QRegularExpression re(QStringLiteral("(\\d+)"));
+    static const QRegularExpression re(QStringLiteral("^GE-Proton(\\d+)(?:[-.](\\d+))?(?:[-.](\\d+))?"), QRegularExpression::CaseInsensitiveOption);
+    const QRegularExpressionMatch m = re.match(name.trimmed());
+    if (!m.hasMatch()) return {};
     QList<int> nums;
-    auto it = re.globalMatch(name);
-    while (it.hasNext())
-        nums.append(it.next().captured(1).toInt());
+    for (int i = 1; i <= 3; ++i) {
+        if (!m.captured(i).isEmpty()) nums.append(m.captured(i).toInt());
+    }
     return QVersionNumber(nums);
 }
 
@@ -298,6 +300,22 @@ bool installProton(QWidget *parent, QString *installedPath)
 
     const QJsonObject rel = QJsonDocument::fromJson(metaData).object();
     const QString tag = rel.value("tag_name").toString().trimmed();
+    const QVersionNumber latestVer = protonVersionKey(tag);
+
+    // Avoid re-downloading if this or a newer GE-Proton is already installed (e.g. via Steam or launcher)
+    for (const ProtonBuild &existing : scanProtonDirs()) {
+        const QVersionNumber existingVer = protonVersionKey(existing.name);
+        const bool sameOrNewer = (!latestVer.isNull() && !existingVer.isNull() && existingVer >= latestVer)
+            || (!tag.isEmpty() && existing.name.startsWith(tag, Qt::CaseInsensitive));
+        if (sameOrNewer) {
+            progress.close();
+            if (installedPath) *installedPath = existing.path;
+            QMessageBox::information(parent, QCoreApplication::translate("GameRuntime", "Install GE-Proton"),
+                QCoreApplication::translate("GameRuntime", "The latest GE-Proton (%1) is already installed.").arg(existing.name));
+            return false;
+        }
+    }
+
     const bool isArm = QSysInfo::currentCpuArchitecture().contains("arm", Qt::CaseInsensitive)
         || QSysInfo::currentCpuArchitecture().contains("aarch64", Qt::CaseInsensitive);
     const QString archSuffix = isArm ? QStringLiteral("aarch64") : QStringLiteral("x86_64");
