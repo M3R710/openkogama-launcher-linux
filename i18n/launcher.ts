@@ -862,6 +862,10 @@ Download and install the latest GE-Proton now? (~600 MB)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>The latest GE-Proton (%1) is already installed.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Could not find a compatible GE-Proton package for this architecture.</source>
         <translation type="unfinished"></translation>
     </message>
