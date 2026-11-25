@@ -2,6 +2,16 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="en" sourcelanguage="en">
 <context>
+    <name>ArchiveBrowser</name>
+    <message numerus="yes">
+        <source>%n map(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+</context>
+<context>
     <name>ClientPatches</name>
     <message numerus="yes">
         <source>added %n server sound(s) to the Sound Emitter list in data.unity3d</source>

@@ -176,6 +176,137 @@
     </message>
 </context>
 <context>
+    <name>ArchiveBrowser</name>
+    <message>
+        <source>Search archived maps...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Search archived avatars...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All regions</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All types</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Most played</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Most liked</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Newest</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Most popular</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Most cubes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Archived maps</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Archived avatars</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add to my worlds</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add to my avatars</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Loading maps archive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Loading avatars archive...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Could not load the archive. Press F5 to try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Untitled map</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Avatar %1</source>
+        <translation type="unfinished">Awatar %1</translation>
+    </message>
+    <message>
+        <source>No archived maps match your search.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No archived avatars match your search.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 plays</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n map(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>%1 cubes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>by %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No map selected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No avatar selected</source>
+        <translation type="unfinished">Nie wybrano awatara</translation>
+    </message>
+    <message>
+        <source>Import</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No download links are available for this map.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Could not fetch map details: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Could not read map details from the archive.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>ClientPatches</name>
     <message numerus="yes">
         <source>added %n server sound(s) to the Sound Emitter list in data.unity3d</source>
@@ -1894,6 +2025,34 @@ Zainstaluj Wine menedżerem pakietów, na przykład &quot;sudo apt install wine&
     <message>
         <source>Switch to 3D</source>
         <translation>Zmień na 3D</translation>
+    </message>
+    <message>
+        <source>Archive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>My worlds</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Worlds saved on your computer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Browse and download archived KoGaMa maps</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>My avatars</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Avatars saved on your computer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Browse and download archived KoGaMa avatars</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Scale...</source>
