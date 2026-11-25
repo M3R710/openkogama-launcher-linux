@@ -847,7 +847,7 @@ Bu hesap seninse giriş yap. Değilse başka bir takma ad seç.</translation>
         <source>GE-Proton is needed to run KoGaMa on Linux.
 
 Download and install the latest GE-Proton now? (~600 MB)</source>
-        <translation>KoGaMa'yı Linux'ta çalıştırmak için GE-Proton gereklidir.
+        <translation>KoGaMa&apos;yı Linux&apos;ta çalıştırmak için GE-Proton gereklidir.
 
 En güncel GE-Proton şimdi indirilip kurulsun mu? (~600 MB)</translation>
     </message>
