@@ -1,4 +1,5 @@
 #include "serverspage.h"
+#include "archivebrowser.h"
 #include "settings.h"
 #include "tunnel.h"
 #include "sharebar.h"
@@ -16,7 +17,9 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QComboBox>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListWidget>
 #include <QMenu>
 #include <QSettings>
@@ -39,6 +42,7 @@
 #include <QTranslator>
 #include <QUrl>
 #include <QUrlQuery>
+#include <QtEndian>
 
 class MockServer : public QTcpServer
 {
@@ -49,6 +53,7 @@ public:
     int metadataStatus = 200;
     int imageStatus = 200;
     QStringList requests;
+    QHash<QString, QByteArray> routes;
 
     MockServer()
     {
@@ -71,6 +76,7 @@ public:
                     QByteArray body = path == "/api/server" ? metadata : path == "/api/server/thumbnail" ? image : QByteArray();
                     if (path == "/ping") { status = 200; body = "{}"; }
                     if (path == "/servers") { status = 200; body = list; }
+                    if (routes.contains(path)) { status = 200; body = routes.value(path); }
                     socket->write("HTTP/1.1 " + QByteArray::number(status) + " Test\r\nContent-Length: "
                         + QByteArray::number(body.size()) + "\r\nConnection: close\r\n\r\n" + body);
                     socket->disconnectFromHost();
@@ -332,8 +338,134 @@ private slots:
         QVERIFY(QFile::remove(QDir(Paths::serverData()).filePath("server.json")));
     }
 
+    void archiveMapsBrowseFilterAndImport()
+    {
+        MockServer server;
+        server.routes["/maps/v1/latest.json"] = QByteArrayLiteral(
+            "{\"format\":1,\"build\":\"test-1\",\"maps\":2,"
+            "\"index\":{\"path\":\"index.json\"},"
+            "\"images\":{\"path\":\"../../images/\"},"
+            "\"details\":{\"path\":\"details/\",\"perFile\":1024}}");
+        server.routes["/maps/v1/builds/test-1/index.json"] = QByteArrayLiteral(
+            "{\"fields\":[\"id\",\"site\",\"name\",\"author\",\"authorId\",\"plays\",\"likes\",\"published\",\"format\",\"size\",\"versions\",\"image\"],"
+            "\"rows\":["
+            "[\"101\",\"www\",\"War Arena\",\"Alice\",\"1\",5000,100,\"2024-01-01\",\"kgmap\",12345,1,\"img1\"],"
+            "[\"202\",\"br\",\"Parkour City\",\"Bob\",\"2\",9000,250,\"2025-05-01\",\"kgmap\",54321,1,\"img2\"]"
+            "]}");
+        server.routes["/maps/v1/builds/test-1/details/000.json"] = QByteArrayLiteral(
+            "["
+            "[\"desc1\",\"\",\"\",[[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"kgmap\",12345,\"\",\"\",[\"https://cdn.openkogama.org/games/aaa.kgmap\"],\"\"]]],"
+            "[\"desc2\",\"\",\"\",[[\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"kgmap\",54321,\"\",\"\",[\"https://cdn.openkogama.org/games/bbb.kgmap\"],\"\"]]]"
+            "]");
+        server.routes["/maps/v1/images/img1.jpg"] = server.image;
+        server.routes["/maps/v1/images/img2.jpg"] = server.image;
+
+        ArchiveBrowser browser(ArchiveBrowser::Maps);
+        browser.setEndpoints(QUrl(server.url() + "/maps/v1/"));
+        browser.ensureLoaded();
+
+        auto *list = browser.findChild<QListWidget *>("archiveMapsList");
+        auto *search = browser.findChild<QLineEdit *>("archiveMapSearch");
+        auto *region = browser.findChild<QComboBox *>("archiveMapRegionFilter");
+        auto *add = browser.findChild<QPushButton *>("archiveAddMapButton");
+        QVERIFY(list && search && region && add);
+
+        // Sorted by Most played by default -> Parkour City (9000) first
+        QTRY_COMPARE(list->count(), 2);
+        QCOMPARE(list->item(0)->text(), QString("Parkour City"));
+        QCOMPARE(list->item(1)->text(), QString("War Arena"));
+
+        // Region filter -> www shows only War Arena
+        region->setCurrentIndex(region->findData("www"));
+        QCOMPARE(list->count(), 1);
+        QCOMPARE(list->item(0)->text(), QString("War Arena"));
+
+        // Reset region and search by author
+        region->setCurrentIndex(0);
+        search->setText("bob");
+        QTRY_COMPARE(list->count(), 1);
+        QCOMPARE(list->item(0)->text(), QString("Parkour City"));
+
+        // Clicking Add fetches detail chunk and emits ImportRequest
+        ImportRequest captured;
+        QUrl capturedThumb;
+        QObject::connect(&browser, &ArchiveBrowser::importRequested, &browser, [&](const ImportRequest &req, const QUrl &thumb) {
+            captured = req;
+            capturedThumb = thumb;
+        });
+        add->click();
+        QTRY_COMPARE(captured.kind, QString("map"));
+        QCOMPARE(captured.name, QString("Parkour City"));
+        QCOMPARE(captured.sha256, QString(64, 'b'));
+        QCOMPARE(captured.urls, QList<QUrl>({QUrl("https://cdn.openkogama.org/games/bbb.kgmap")}));
+        QCOMPARE(capturedThumb, QUrl(server.url() + "/maps/v1/images/img2.jpg"));
+    }
+
+    void archiveAvatarsBrowseFilterAndImport()
+    {
+        MockServer server;
+        server.routes["/avatars/v1/latest.json"] = QByteArrayLiteral(
+            "{\"format\":1,\"kind\":\"avatars\",\"build\":\"av-1\",\"avatars\":2,"
+            "\"cards\":{\"path\":\"cards/\",\"record\":54,\"perFile\":16384},"
+            "\"titles\":\"maps.json\"}");
+
+        auto makeCard = [](uchar shaByte, quint32 maps, quint32 cubes, quint8 sources, quint8 image, quint16 pack, quint32 offset, quint32 length, quint16 mapIdx) {
+            QByteArray rec(54, '\0');
+            for (int i = 0; i < 32; ++i) rec[i] = char(shaByte);
+            qToLittleEndian(maps, reinterpret_cast<uchar *>(rec.data() + 32));
+            qToLittleEndian(cubes, reinterpret_cast<uchar *>(rec.data() + 36));
+            rec[40] = char(sources);
+            rec[41] = char(image);
+            qToLittleEndian(pack, reinterpret_cast<uchar *>(rec.data() + 42));
+            qToLittleEndian(offset, reinterpret_cast<uchar *>(rec.data() + 44));
+            qToLittleEndian(length, reinterpret_cast<uchar *>(rec.data() + 48));
+            qToLittleEndian(mapIdx, reinterpret_cast<uchar *>(rec.data() + 52));
+            return rec;
+        };
+
+        QByteArray cards;
+        cards.append(makeCard(0x11, 500, 384, 1, 1, 0x01a, 100, 250, 1));
+        cards.append(makeCard(0x22, 999, 400, 1, 1, 0x002, 0, 128, 1)); // marked mature in meta.json -> must be excluded
+        server.routes["/avatars/v1/builds/av-1/cards/000.bin"] = cards;
+        server.routes["/avatars/v1/builds/av-1/maps.json"] = QByteArrayLiteral("[\"\",\"Test Map\"]");
+        server.routes["/avatars/meta.json"] = QByteArrayLiteral(
+            "{\"build\":\"av-1\",\"fields\":[\"name\",\"type\",\"desc\",\"flags\",\"rating\",\"tags\"],"
+            "\"rows\":{"
+            "\"1\":[\"Blue Robot\",\"robot\",\"Cool robot\",\"\",\"\",\"scifi\"],"
+            "\"2\":[\"Blocked Avatar\",\"human\",\"Should hide\",\"\",\"mature\",\"\"]"
+            "}}");
+        server.routes["/avatars/v1/builds/av-1/images/" + QString(64, '1') + ".png"] = server.image;
+
+        ArchiveBrowser browser(ArchiveBrowser::Avatars);
+        browser.setEndpoints(QUrl(server.url() + "/avatars/v1/"), QUrl(server.url() + "/avatars/meta.json"));
+        browser.ensureLoaded();
+
+        auto *list = browser.findChild<QListWidget *>("archiveAvatarsList");
+        auto *typeFilter = browser.findChild<QComboBox *>("archiveAvatarTypeFilter");
+        auto *add = browser.findChild<QPushButton *>("archiveAddAvatarButton");
+        QVERIFY(list && typeFilter && add);
+
+        // Mature avatar #2 is filtered out; only Blue Robot remains
+        QTRY_COMPARE(list->count(), 1);
+        QCOMPARE(list->item(0)->text(), QString("Blue Robot"));
+        QVERIFY(typeFilter->findData("robot") > 0);
+
+        ImportRequest captured;
+        QObject::connect(&browser, &ArchiveBrowser::importRequested, &browser, [&](const ImportRequest &req, const QUrl &) {
+            captured = req;
+        });
+        add->click();
+        QCOMPARE(captured.kind, QString("avatar"));
+        QCOMPARE(captured.name, QString("Blue Robot"));
+        QCOMPARE(captured.sha256, QString(64, '1'));
+        QCOMPARE(captured.offset, qint64(100));
+        QCOMPARE(captured.length, qint64(250));
+        QCOMPARE(captured.urls, QList<QUrl>({QUrl(server.url() + "/avatars/v1/builds/av-1/packs/01a.bin")}));
+    }
+
     void cleanupTestCase()
     {
+        QDir(Paths::data() + "/cache").removeRecursively();
         const QString settings = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/settings.ini";
         QFile::remove(settings);
         QDir().rmdir(QFileInfo(settings).absolutePath());

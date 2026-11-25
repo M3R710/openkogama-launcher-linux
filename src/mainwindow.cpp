@@ -634,6 +634,9 @@ bool MainWindow::launchInstance(const QString &path) {
             m_hostClient = client;
             m_share->share(world, name, clientVersion(instances->item(ui->versionCombo->currentIndex())));
         });
+        connect(m_worlds, &WorldsDialog::importRequested, this, [this](const ImportRequest &request, const QUrl &thumbnailUrl) {
+            openImport(request, false, thumbnailUrl);
+        });
         connect(m_share, &ShareBar::hostedWorldChanged, m_worlds, &WorldsDialog::setHostedWorld);
         m_worlds->setHostedWorld(m_share->hostedWorld());
         m_worlds->setWindowFlags(Qt::Widget);
@@ -778,17 +781,19 @@ void MainWindow::checkForUpdates() {
     Updater::check(this, m_updates, false);
 }
 
-void MainWindow::openImport(const ImportRequest &request) {
+void MainWindow::openImport(const ImportRequest &request, bool confirm, const QUrl &thumbnailUrl) {
     const QString path = ui->versionCombo->currentData().toString();
     if (path.isEmpty()) {
         QMessageBox::information(this, tr("Import"), tr("Add a game version before adding content from the website."));
         return;
     }
-    const QString question = request.kind == "map" ? tr("Add this map to your worlds?")
-        : request.kind == "avatar" ? tr("Add this avatar?")
-        : tr("Add this model to your inventory?");
-    if (QMessageBox::question(this, tr("Import"), request.name.isEmpty() ? question : question + "\n\n" + request.name) != QMessageBox::Yes)
-        return;
+    if (confirm) {
+        const QString question = request.kind == "map" ? tr("Add this map to your worlds?")
+            : request.kind == "avatar" ? tr("Add this avatar?")
+            : tr("Add this model to your inventory?");
+        if (QMessageBox::question(this, tr("Import"), request.name.isEmpty() ? question : question + "\n\n" + request.name) != QMessageBox::Yes)
+            return;
+    }
     if (!launchInstance(path)) return;
 
     const QString title = request.name.isEmpty() ? tr("this item") : QStringLiteral("\"%1\"").arg(request.name);
@@ -808,7 +813,7 @@ void MainWindow::openImport(const ImportRequest &request) {
         progress->setValue(int(qMin<qint64>(100, done * 100 / total)));
     });
     connect(progress.data(), &QProgressDialog::canceled, importer, &ContentImporter::cancel);
-    connect(importer, &ContentImporter::finished, this, [this, importer, progress, kind](bool ok, const QString &error, int id) {
+    connect(importer, &ContentImporter::finished, this, [this, importer, progress, kind, thumbnailUrl](bool ok, const QString &error, int id) {
         importer->deleteLater();
         if (progress) {
             progress->close();
@@ -820,6 +825,7 @@ void MainWindow::openImport(const ImportRequest &request) {
         }
         if (!m_worlds) return;
         if (kind == "map") {
+            if (thumbnailUrl.isValid()) m_worlds->setArchiveThumbnail(id, thumbnailUrl);
             ui->mainTabs->setCurrentWidget(ui->playTab);
             ui->playStack->setCurrentWidget(ui->worldsPage);
             m_worlds->showWorlds(id);

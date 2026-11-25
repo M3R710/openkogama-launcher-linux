@@ -10,6 +10,7 @@
 #include <functional>
 #include <QPointer>
 #include <QSet>
+#include <QUrl>
 
 class WorldsDialog;
 class ShareBar;
@@ -59,7 +60,7 @@ private:
     bool prepareInstance(const QString &path, QString *executable);
     void joinServer(const QString &address);
     void joinCode(const QString &address);
-    void openImport(const ImportRequest &request);
+    void openImport(const ImportRequest &request, bool confirm = true, const QUrl &thumbnailUrl = {});
     void offerVersion(const QStringList &clients, const QString &title, std::function<void()> then);
     void updateHostVersion();
     void editServerSettings();

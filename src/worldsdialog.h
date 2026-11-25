@@ -7,7 +7,13 @@
 #include <QNetworkAccessManager>
 #include <QPointer>
 #include <QProcess>
+#include <QUrl>
 #include <functional>
+
+class ArchiveBrowser;
+class QStackedWidget;
+class QTabBar;
+struct ImportRequest;
 
 namespace Ui {
 class WorldsDialog;
@@ -28,11 +34,13 @@ public:
     void showWorlds(int select = -1);
     void showAvatars(int select = -1);
     void showInventory(int select = -1);
+    void setArchiveThumbnail(int world, const QUrl &url);
     void setHostedWorld(int world);
     void reject() override;
 
 signals:
     void hostRequested(int world, const QString &name, QProcess *client);
+    void importRequested(const ImportRequest &request, const QUrl &thumbnailUrl);
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;
@@ -100,6 +108,12 @@ private:
     int m_hostedWorld = 0;
     bool m_hasAvatarEditor = true;
     QList<QPointer<QProcess>> m_clients;
+    QTabBar *m_worldsView = nullptr;
+    QStackedWidget *m_worldsStack = nullptr;
+    ArchiveBrowser *m_mapsArchive = nullptr;
+    QTabBar *m_avatarsView = nullptr;
+    QStackedWidget *m_avatarsStack = nullptr;
+    ArchiveBrowser *m_avatarsArchive = nullptr;
 };
 
 #endif // WORLDSDIALOG_H
