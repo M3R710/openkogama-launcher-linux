@@ -2183,6 +2183,12 @@ Paket yöneticinle Wine'ı kur (örneğin "sudo apt install wine") ve tekrar den
         <translation>Misafirlerin oyun modunda katılır (Sunucu ayarları)</translation>
     </message>
     <message numerus="yes">
+        <source>%n selected</source>
+        <translation>
+            <numerusform>%n öğe seçili</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
         <source>Search %n world(s)...</source>
         <translation>
             <numerusform>%n dünya içinde ara...</numerusform>
@@ -2285,6 +2291,10 @@ Paket yöneticinle Wine'ı kur (örneğin "sudo apt install wine") ve tekrar den
         </translation>
     </message>
     <message>
+        <source>Export worlds</source>
+        <translation>Dünyaları dışa aktar</translation>
+    </message>
+    <message>
         <source>Export world</source>
         <translation>Dünyayı dışa aktar</translation>
     </message>
@@ -2304,17 +2314,59 @@ Paket yöneticinle Wine'ı kur (örneğin "sudo apt install wine") ve tekrar den
         <source>Could not rename this world</source>
         <translation>Bu dünya yeniden adlandırılamadı</translation>
     </message>
+    <message numerus="yes">
+        <source>Delete %n world(s)? This can't be undone.</source>
+        <translation>
+            <numerusform>%n dünya silinsin mi? Bu işlem geri alınamaz.</numerusform>
+        </translation>
+    </message>
     <message>
         <source>Delete world</source>
         <translation>Dünyayı sil</translation>
     </message>
     <message>
-        <source>Delete "%1"? This can't be undone.</source>
-        <translation>"%1" silinsin mi? Bu işlem geri alınamaz.</translation>
+        <source>Some worlds could not be deleted because they are open in the game. Close them first.</source>
+        <translation>Bazı dünyalar oyunda açık olduğu için silinemedi. Önce onları kapat.</translation>
+    </message>
+    <message numerus="yes">
+        <source>Delete %n avatar(s)? This can't be undone.</source>
+        <translation>
+            <numerusform>%n avatar silinsin mi? Bu işlem geri alınamaz.</numerusform>
+        </translation>
     </message>
     <message>
-        <source>This world is open in the game. Close it first.</source>
-        <translation>Bu dünya oyunda açık. Önce oyunu kapat.</translation>
+        <source>Your currently active avatar will be kept.</source>
+        <translation>Şu anda aktif olan avatarın korunacak.</translation>
+    </message>
+    <message>
+        <source>Could not delete some avatars.</source>
+        <translation>Bazı avatarlar silinemedi.</translation>
+    </message>
+    <message>
+        <source>Could not delete some items.</source>
+        <translation>Bazı öğeler silinemedi.</translation>
+    </message>
+    <message numerus="yes">
+        <source>Could not export %n item(s).</source>
+        <translation>
+            <numerusform>%n öğe dışa aktarılamadı.</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Export %n item(s)...</source>
+        <translation>
+            <numerusform>%n öğeyi dışa aktar...</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Delete %n item(s)</source>
+        <translation>
+            <numerusform>%n öğeyi sil</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Delete "%1"? This can't be undone.</source>
+        <translation>"%1" silinsin mi? Bu işlem geri alınamaz.</translation>
     </message>
     <message>
         <source>Play</source>
@@ -2324,9 +2376,21 @@ Paket yöneticinle Wine'ı kur (örneğin "sudo apt install wine") ve tekrar den
         <source>Build</source>
         <translation>İnşa et</translation>
     </message>
+    <message numerus="yes">
+        <source>Export %n world(s)...</source>
+        <translation>
+            <numerusform>%n dünyayı dışa aktar...</numerusform>
+        </translation>
+    </message>
     <message>
         <source>Delete</source>
         <translation>Sil</translation>
+    </message>
+    <message numerus="yes">
+        <source>Delete %n world(s)</source>
+        <translation>
+            <numerusform>%n dünyayı sil</numerusform>
+        </translation>
     </message>
     <message>
         <source>Could not load your avatars. Press F5 to try again.</source>
@@ -2363,6 +2427,10 @@ Paket yöneticinle Wine'ı kur (örneğin "sudo apt install wine") ve tekrar den
         </translation>
     </message>
     <message>
+        <source>Export avatars</source>
+        <translation>Avatarları dışa aktar</translation>
+    </message>
+    <message>
         <source>Export avatar</source>
         <translation>Avatarı dışa aktar</translation>
     </message>
@@ -2387,12 +2455,20 @@ Paket yöneticinle Wine'ı kur (örneğin "sudo apt install wine") ve tekrar den
         <translation>Bu avatarı kullanıyorsun. Önce başka birini kullan, sonra bunu sil.</translation>
     </message>
     <message>
-        <source>Could not delete this avatar</source>
-        <translation>Bu avatar silinemedi</translation>
-    </message>
-    <message>
         <source>Use</source>
         <translation>Kullan</translation>
+    </message>
+    <message numerus="yes">
+        <source>Export %n avatar(s)...</source>
+        <translation>
+            <numerusform>%n avatarı dışa aktar...</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Delete %n avatar(s)</source>
+        <translation>
+            <numerusform>%n avatarı sil</numerusform>
+        </translation>
     </message>
     <message>
         <source>Could not load your inventory. Press F5 to try again.</source>
@@ -2467,6 +2543,10 @@ Paket yöneticinle Wine'ı kur (örneğin "sudo apt install wine") ve tekrar den
         <translation>Bu modelin ölçeği değiştirilemedi</translation>
     </message>
     <message>
+        <source>Export models</source>
+        <translation>Modelleri dışa aktar</translation>
+    </message>
+    <message>
         <source>Export model</source>
         <translation>Modeli dışa aktar</translation>
     </message>
@@ -2482,6 +2562,12 @@ Paket yöneticinle Wine'ı kur (örneğin "sudo apt install wine") ve tekrar den
         <source>Could not rename this item</source>
         <translation>Bu öğe yeniden adlandırılamadı</translation>
     </message>
+    <message numerus="yes">
+        <source>Delete %n item(s) from your inventory? This can't be undone.</source>
+        <translation>
+            <numerusform>Envanterinden %n öğe silinsin mi? Bu işlem geri alınamaz.</numerusform>
+        </translation>
+    </message>
     <message>
         <source>Delete item</source>
         <translation>Öğeyi sil</translation>
@@ -2489,10 +2575,6 @@ Paket yöneticinle Wine'ı kur (örneğin "sudo apt install wine") ve tekrar den
     <message>
         <source>Delete "%1" from your inventory? This can't be undone.</source>
         <translation>"%1" envanterinden silinsin mi? Bu işlem geri alınamaz.</translation>
-    </message>
-    <message>
-        <source>Could not delete this item</source>
-        <translation>Bu öğe silinemedi</translation>
     </message>
     <message>
         <source>Worlds</source>

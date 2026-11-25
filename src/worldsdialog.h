@@ -98,6 +98,8 @@ private:
     void scaleItem();
     void onItemRenamed(QListWidgetItem *item);
     void deleteItem();
+    void deleteBatch(const QString &endpoint, QList<int> ids, const QString &errorTitle, const QString &errorMessage, std::function<void()> onDone, int failed = 0);
+    void exportBatch(const QString &endpoint, QList<QPair<int, QString>> items, const QString &dir, const QString &ext, int failed = 0);
     void showItemMenu(const QPoint &pos);
     int selectedItem() const;
 
