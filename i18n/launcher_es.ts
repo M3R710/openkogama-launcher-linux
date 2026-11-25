@@ -349,6 +349,22 @@
         </translation>
     </message>
     <message>
+        <source>Refresh</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Copy name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>More by %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open on openkogama.org</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Import</source>
         <translation type="unfinished">Importar</translation>
     </message>
