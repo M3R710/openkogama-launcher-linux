@@ -70,4 +70,7 @@ void setTheme(const QString &theme);
 bool askMapClientVersion();
 void setAskMapClientVersion(bool enabled);
 
+QString protonPath();
+void setProtonPath(const QString &path);
+
 }

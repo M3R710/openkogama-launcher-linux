@@ -266,6 +266,16 @@ void setAskMapClientVersion(bool enabled)
     store().setValue("archive/askMapClientVersion", enabled);
 }
 
+QString protonPath()
+{
+    return store().value("runtime/protonPath").toString();
+}
+
+void setProtonPath(const QString &path)
+{
+    store().setValue("runtime/protonPath", path);
+}
+
 }
 
 QString GameServer::addressOf(const QString &text)
