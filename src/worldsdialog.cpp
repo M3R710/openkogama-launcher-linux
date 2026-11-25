@@ -1,5 +1,6 @@
 #include "worldsdialog.h"
 #include "ui_worldsdialog.h"
+#include "archivebrowser.h"
 #include "launchdialog.h"
 #include "gamelauncher.h"
 #include "playerprofile.h"
@@ -18,6 +19,8 @@
 #include <optional>
 #include <QKeyEvent>
 #include <QStyle>
+#include <QStackedWidget>
+#include <QTabBar>
 #include <QPixmap>
 #include <QPainter>
 #include <QTimer>
@@ -199,10 +202,64 @@ WorldsDialog::WorldsDialog(const QString &path, const QString &exe, QProcess *se
     deleteShortcut->setContext(Qt::WidgetShortcut);
     connect(deleteShortcut, &QShortcut::activated, this, &WorldsDialog::deleteWorld);
     connect(ui->worldsList, &QListWidget::customContextMenuRequested, this, &WorldsDialog::showWorldMenu);
-    auto *refreshWorlds = new QShortcut(QKeySequence::Refresh, ui->worldsTab);
+    auto wrapWithArchive = [this](QWidget *tab, const QString &barName, const QString &localLabel, const QString &localTip,
+                                  const QString &archiveTip, ArchiveBrowser::Kind kind,
+                                  QTabBar **outBar, QStackedWidget **outStack, ArchiveBrowser **outBrowser) -> QWidget * {
+        auto *outer = qobject_cast<QVBoxLayout *>(tab->layout());
+        auto *local = new QWidget(tab);
+        auto *inner = new QVBoxLayout(local);
+        inner->setContentsMargins(0, 0, 0, 0);
+        inner->setSpacing(8);
+        while (QLayoutItem *child = outer->takeAt(0)) {
+            if (QWidget *w = child->widget()) {
+                inner->addWidget(w, w == ui->worldsList || w == ui->avatarsList ? 1 : 0);
+                delete child;
+            } else if (QLayout *sub = child->layout()) {
+                inner->addLayout(sub);
+            } else {
+                inner->addItem(child);
+            }
+        }
+        auto *bar = new QTabBar(tab);
+        bar->setObjectName(barName);
+        bar->setDrawBase(false);
+        bar->setExpanding(false);
+        bar->addTab(localLabel);
+        bar->addTab(tr("Archive"));
+        bar->setTabToolTip(0, localTip);
+        bar->setTabToolTip(1, archiveTip);
+
+        auto *stack = new QStackedWidget(tab);
+        auto *browser = new ArchiveBrowser(kind, stack);
+        stack->addWidget(local);
+        stack->addWidget(browser);
+
+        outer->addWidget(bar);
+        outer->addWidget(stack, 1);
+
+        connect(bar, &QTabBar::currentChanged, this, [stack, browser](int index) {
+            stack->setCurrentIndex(index);
+            if (index == 1) browser->ensureLoaded();
+        });
+        connect(browser, &ArchiveBrowser::importRequested, this, &WorldsDialog::importRequested);
+
+        *outBar = bar;
+        *outStack = stack;
+        *outBrowser = browser;
+        return local;
+    };
+
+    QWidget *localWorlds = wrapWithArchive(ui->worldsTab, "worldsViewTabs", tr("My worlds"),
+        tr("Worlds saved on your computer"), tr("Browse and download archived KoGaMa maps"),
+        ArchiveBrowser::Maps, &m_worldsView, &m_worldsStack, &m_mapsArchive);
+    QWidget *localAvatars = wrapWithArchive(ui->avatarsTab, "avatarsViewTabs", tr("My avatars"),
+        tr("Avatars saved on your computer"), tr("Browse and download archived KoGaMa avatars"),
+        ArchiveBrowser::Avatars, &m_avatarsView, &m_avatarsStack, &m_avatarsArchive);
+
+    auto *refreshWorlds = new QShortcut(QKeySequence::Refresh, localWorlds);
     refreshWorlds->setContext(Qt::WidgetWithChildrenShortcut);
     connect(refreshWorlds, &QShortcut::activated, this, [this]() { loadWorlds(selectedWorld()); });
-    auto *refreshAvatars = new QShortcut(QKeySequence::Refresh, ui->avatarsTab);
+    auto *refreshAvatars = new QShortcut(QKeySequence::Refresh, localAvatars);
     refreshAvatars->setContext(Qt::WidgetWithChildrenShortcut);
     connect(refreshAvatars, &QShortcut::activated, this, [this]() { loadAvatars(selectedAvatar()); });
     connect(ui->worldSearchLineEdit, &QLineEdit::textChanged, this, [this]() { filterWorlds(); });
@@ -316,15 +373,21 @@ QWidget *WorldsDialog::inventoryPage() const {
 }
 
 void WorldsDialog::showWorlds(int select) {
+    if (select > 0 && m_worldsView) m_worldsView->setCurrentIndex(0);
     loadWorlds(select < 0 ? selectedWorld() : select);
 }
 
 void WorldsDialog::showAvatars(int select) {
+    if (select > 0 && m_avatarsView) m_avatarsView->setCurrentIndex(0);
     loadAvatars(select < 0 ? selectedAvatar() : select);
 }
 
 void WorldsDialog::showInventory(int select) {
     loadInventory(select < 0 ? selectedItem() : select);
+}
+
+void WorldsDialog::setArchiveThumbnail(int world, const QUrl &url) {
+    if (world > 0 && url.isValid()) downloadArchiveThumbnail(world, url);
 }
 
 bool WorldsDialog::hasRunningGames() const {
